@@ -1,4 +1,5 @@
-﻿// types : MT
+﻿module MT.ToGrammar
+// types : MT
 type letterOfAlphabet = char
 type exSymbol = char
 type state = int
