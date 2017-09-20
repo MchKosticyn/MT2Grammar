@@ -36,7 +36,6 @@ module Primes =
                 List.map (fun ((p, a), (q, b, m)) -> ((p + shift, a), (q + shift, b, m))) delta
             let states = List.fold (fun stts ((p, _), (q, _, _)) -> Set.add p stts |> Set.add q) (set[]) delta
             assert (Set.isSuperset states <| Set.union finalStates outerStates) // states are ALL states
-            assert (List.isEmpty <| List.filter (fun ((p, _), (q, _, _)) -> p = q && Set.contains p outerStates) delta) // cycles in outer
             assert (Set.isEmpty <| Set.intersect finalStates outerStates) // final states can't be outer
             {states=states; delta=delta; initialState=shift; outerStates=outerStates; finalStates=finalStates}
         new (shift: int, outerStates: Set<state>, delta: list<DeltaFuncContents>) =
@@ -72,6 +71,7 @@ module Primes =
     let One = TLetter '1'
     let NZero = TLetter '2'
     let NOne = TLetter '3'
+
     let flipT x =
         if x = Zero then One
         else if x = NZero then NOne
@@ -115,7 +115,7 @@ module Primes =
     let cycle (mtc: MicroMTCombinator) : MicroMTCombinator =
         let mt = runMMTC mtc 0
         let outerState = mt.outerStates.MaximumElement
-        mkMMTCombFin mt.finalStates (Set.remove outerState mt.states) <| substStepsOfDelta outerState 0 mt.delta
+        mkMMTCombFin mt.finalStates Set.empty <| substStepsOfDelta outerState 0 mt.delta
 
     let addToInitial (fromS: trackSymbol) (toS: trackSymbol) (m: Move) (mtc: MicroMTCombinator) : MicroMTCombinator =
         let runner shift =
@@ -163,14 +163,15 @@ module Primes =
         @ skipBlank 11 12 Right // [nBn
         |> mkMMTComb [12]
 
+    let GOTO_RIGHT = // [n'BxBa -> n'BxBa[B]
+        skipAlpha 0 0 Right // [n'BxBa -> n'[B]xBa
+        @ skipBlank 0 1 Right // n'B[xBa
+        @ skipAlpha 1 1 Right // n'Bx[B]a
+        @ skipBlank 1 2 Right // n'BxB[a
+        @ skipAlpha 2 2 Right // n'BxBa[B]
+        |> mkMMTComb [2]
+
     let COPY2 : MicroMTCombinator = // forall x . [nBx -> [nBxBn
-        let GOTO_RIGHT = // [n'BxBa -> n'BxBa[B]
-            skipAlpha 0 0 Right // [n'BxBa -> n'[B]xBa
-            @ skipBlank 0 1 Right // n'B[xBa
-            @ skipAlpha 1 1 Right // n'Bx[B]a
-            @ skipBlank 1 2 Right // n'BxB[a
-            @ skipAlpha 2 2 Right // n'BxBa[B]
-            |> mkMMTComb [2]
         let GOTO_LEFT = // Nn'BxBa] -> N[n'BxBa
             skipAlpha 0 0 Left // Nn'Bx[B]a
             @ skipBlank 0 1 Left // Nn'Bx]Ba
