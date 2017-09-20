@@ -35,7 +35,8 @@ module Primes =
             let delta : list<DeltaFuncContents> =
                 List.map (fun ((p, a), (q, b, m)) -> ((p + shift, a), (q + shift, b, m))) delta
             let states = List.fold (fun stts ((p, _), (q, _, _)) -> Set.add p stts |> Set.add q) (set[]) delta
-            assert (Set.isSuperset states <| Set.union finalStates outerStates)
+            assert (Set.isSuperset states <| Set.union finalStates outerStates) // states are ALL states
+            assert (List.isEmpty <| List.filter (fun ((p, _), (q, _, _)) -> p = q && Set.contains p outerStates) delta) // cycles in outer
             {states=states; delta=delta; initialState=shift; outerStates=outerStates; finalStates=finalStates}
         new (shift: int, outerStates: Set<state>, delta: list<DeltaFuncContents>) =
             new MicroMT(shift, set[], outerStates, delta)
@@ -43,8 +44,9 @@ module Primes =
             new MicroMT(shift, set[], Set.singleton outerState, delta)
 
     type MicroMTCombinator = MMTC of (int -> MicroMT)
-    let mkMMTComb (outerStates: list<state>) (delta: list<DeltaFuncContents>) : MicroMTCombinator =
-        MMTC <| fun shift -> new MicroMT(shift, Set.ofList outerStates, delta)
+    let mkMMTCombFin (finalStates: Set<state>) (outerStates: list<state>) (delta: list<DeltaFuncContents>) : MicroMTCombinator =
+        MMTC <| fun shift -> new MicroMT(shift, finalStates, Set.ofList outerStates, delta)
+    let mkMMTComb = mkMMTCombFin Set.empty
 
     let mkSingleMMTC a b m = mkMMTComb [1] [((0, a), (1, b, m))]
 
@@ -89,7 +91,24 @@ module Primes =
         [((q, NZero), (p, Zero, m)); ((q, NOne), (p, One, m))]
 
     let fork (cases: list<trackSymbol * trackSymbol * Move * MicroMTCombinator>) : MicroMTCombinator =
-        __notImplemented__()
+        let rec loop shift states finalStates (mergeDeltas: state -> list<DeltaFuncContents>)=
+            let substStep fromS toS =
+                let substState q = if q = fromS then toS else q
+                List.map (fun ((q, a), (p, b, m)) -> ((substState q, a), (substState p, b, m)))
+            function
+            | [] -> mkMMTCombFin finalStates [shift] (mergeDeltas shift)
+            | (fromL, toL, mv, mts)::mtss ->
+                let mt = runMMTC mts shift
+                let outerState = mt.outerStates.MaximumElement
+                loop (mt.states.MaximumElement + 1)
+                     (Set.union states <| Set.remove outerState mt.states)
+                     (Set.union finalStates mt.finalStates)
+                     (fun lastState ->
+                        ((0, fromL), (shift, toL, mv))
+                        :: substStep outerState lastState mt.delta
+                        @ mergeDeltas lastState)
+                     mtss
+        loop 1 Set.empty Set.empty (fun _ -> []) cases
 
     let cycle (mt: MicroMTCombinator) : MicroMTCombinator =
         __notImplemented__()
