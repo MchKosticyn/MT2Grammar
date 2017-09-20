@@ -47,6 +47,7 @@ module Primes =
         MMTC <| fun shift -> new MicroMT(shift, Set.ofList outerStates, delta)
     let runMMTC (x: MicroMTCombinator) shift =
         match x with MMTC f -> f shift
+
     let (>>) (a: MicroMTCombinator) (b: MicroMTCombinator) : MicroMTCombinator =
         let runner shift =
             let left = runMMTC a shift
@@ -69,15 +70,21 @@ module Primes =
         if x = Zero then One
         else if x = NZero then NOne
         else x
-    let genAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
+    let cast x =
+        if x = Zero then NZero
+        else if x = One then NOne
+        else x
+    let skipBlank q p m : list<DeltaFuncContents> =
+        [((q, Blank), (p, Blank, m))]
+    let skipAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
         [((q, Zero), (p, Zero, m)); ((q, One), (p, One, m))]
-    let genNAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
+    let skipNAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
         [((q, NZero), (p, NZero, m)); ((q, NOne), (p, NOne, m))]
-    let genAll (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
-        genAlpha q p m @ genNAlpha q p m
-    let genNAlphaToAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
+    let skipAll (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
+        skipAlpha q p m @ skipNAlpha q p m
+    let castNAlphaToAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
         [((q, NZero), (p, Zero, m)); ((q, NOne), (p, One, m))]
-    let fork (states: list<DeltaFuncContents>) : list<DeltaFuncContents> =
+    let dup (states: list<DeltaFuncContents>) : list<DeltaFuncContents> =
         let start : int = fold1 (fun ((q, _), (p, _, _)) -> min q p) (fun m ((q, _), (p, _, _)) -> min q p |> min m) states
         let fin   : int = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m) -1 states
         let shiftRest q = if q = start || q = fin then q else q + 1
@@ -90,31 +97,29 @@ module Primes =
             [
                 ((0, Zero), (1, Blank, Right)) // == 0
                 ((0, One), (2, One, Right))
-                ((2, Blank), (1, Blank, Right)) // == 1
             ]
-            @ genAlpha 2 3 Left // go back
+            @ skipBlank 2 1 Right // == 1
+            @ skipAlpha 2 3 Left // go back
             |> mkMMTComb [3] // out is 3
 
     let COPY : MicroMTCombinator = // [n -> [nBn
-        genAlpha 0 1 Left // [B]n
+        skipAlpha 0 1 Left // [B]n
         @ [((1, Blank), (2, Sharp, Right))] // #[n
-        @ genNAlphaToAlpha 2 2 Right // #x[n, x: NA, n: A
-        @ fork [
-            ((2, Zero), (3, Sharp, Left)) // [#]#n'
-            ((3, Sharp), (5, Zero, Right)) // 0[#]n'
-            ((5, Sharp), (7, Sharp, Right)) // 0#[n'
-            ((7, Blank), (9, NZero, Left)) // 0#n'N[B] -> 0#n'N]2
-        ]
-        @ genAll 7 7 Right // 0#[n' -> 0#n'[B]
-        @ genAll 9 9 Left // 0#n'N]2 -> 0[#]n'N2  (merge forks)
-        @ [
-            ((9, Sharp), (2, Sharp, Right)) // 0#[n'N2
-            ((2, Blank), (10, Blank, Left)) // n#n[B] -> n#n]
-        ]
-        @ genAlpha 10 10 Left // n[B]n
+        @ castNAlphaToAlpha 2 2 Right // #x[n, x: NA, n: A
+        @ dup ([
+                ((2, Zero), (3, Sharp, Left)) // [#]#n'
+                ((3, Sharp), (5, Zero, Right)) // 0[#]n'
+                ((5, Sharp), (7, Sharp, Right)) // 0#[n'
+                ((7, Blank), (9, NZero, Left)) // 0#n'N[B] -> 0#n'N]2
+            ]
+            @ skipAll 7 7 Right) // 0#[n' -> 0#n'[B]
+        @ skipAll 9 9 Left // 0#n'N]2 -> 0[#]n'N2  (merge forks)
+        @ [((9, Sharp), (2, Sharp, Right))] // 0#[n'N2
+        @ skipBlank 2 10 Left // n#n[B] -> n#n]
+        @ skipAlpha 10 10 Left // n[B]n
         @ [((10, Sharp), (11, Blank, Left))] // n]Bn
-        @ genAlpha 11 11 Left // [B]nBn
-        @ [((11, Blank), (12, Blank, Right))] // [nBn
+        @ skipAlpha 11 11 Left // [B]nBn
+        @ skipBlank 11 12 Right // [nBn
         |> mkMMTComb [12]
 
 
