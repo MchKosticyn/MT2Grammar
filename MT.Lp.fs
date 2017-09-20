@@ -88,6 +88,12 @@ module Primes =
     let castNAlphaToAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
         [((q, NZero), (p, Zero, m)); ((q, NOne), (p, One, m))]
 
+    let fork (cases: list<trackSymbol * trackSymbol * Move * MicroMTCombinator>) : MicroMTCombinator =
+        __notImplemented__()
+
+    let cycle (mt: MicroMTCombinator) : MicroMTCombinator =
+        __notImplemented__()
+
     let addToInitial (fromS: trackSymbol) (toS: trackSymbol) (m: Move) (mtc: MicroMTCombinator) : MicroMTCombinator =
         let runner shift =
             let mt = runMMTC mtc 0
@@ -134,6 +140,36 @@ module Primes =
         @ skipBlank 11 12 Right // [nBn
         |> mkMMTComb [12]
 
+    let COPY2 : MicroMTCombinator = // forall x . [nBx -> [nBxBn
+        let GOTO_RIGHT = // [n'BxBa -> n'BxBa[B]
+            skipAlpha 0 0 Right // [n'BxBa -> n'[B]xBa
+            @ skipBlank 0 1 Right // n'B[xBa
+            @ skipAlpha 1 1 Right // n'Bx[B]a
+            @ skipBlank 1 2 Right // n'BxB[a
+            @ skipAlpha 2 2 Right // n'BxBa[B]
+            |> mkMMTComb [2]
+        let GOTO_LEFT = // Nn'BxBa] -> N[n'BxBa
+            skipAlpha 0 0 Left // Nn'Bx[B]a
+            @ skipBlank 0 1 Left // Nn'Bx]Ba
+            @ skipAlpha 1 1 Left // Nn'[B]xBa
+            @ skipBlank 1 2 Left // Nn']BxBa
+            @ skipAlpha 2 2 Left // N]n'BxBa
+            @ skipNAlpha 2 3 Right // N[n'BxBa
+            |> mkMMTComb [3]
+        let CLEAN = // N]BxBn -> [nBxBn
+            castNAlphaToAlpha 0 0 Left // [B]nBxBn
+            @ skipBlank 0 1 Right
+            |> mkMMTComb [1]
+        let copy1symb symb =
+            (symb, cast symb, Right, GOTO_RIGHT >> mkSingleMMTC Blank symb Left) // [snBxBa -> SnBxBa]s
+        cycle (
+            fork [
+                copy1symb Zero
+                copy1symb One
+            ]
+            >> GOTO_LEFT)
+        |> addToInitial Blank Blank Left // N]BxBn
+        >> CLEAN
 
 module Test =
     open Primes
