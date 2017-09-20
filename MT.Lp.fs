@@ -45,6 +45,9 @@ module Primes =
     type MicroMTCombinator = MMTC of (int -> MicroMT)
     let mkMMTComb (outerStates: list<state>) (delta: list<DeltaFuncContents>) : MicroMTCombinator =
         MMTC <| fun shift -> new MicroMT(shift, Set.ofList outerStates, delta)
+
+    let mkSingleMMTC a b m = mkMMTComb [1] [((0, a), (1, b, m))]
+
     let runMMTC (x: MicroMTCombinator) shift =
         match x with MMTC f -> f shift
 
@@ -84,6 +87,15 @@ module Primes =
         skipAlpha q p m @ skipNAlpha q p m
     let castNAlphaToAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
         [((q, NZero), (p, Zero, m)); ((q, NOne), (p, One, m))]
+
+    let addToInitial (fromS: trackSymbol) (toS: trackSymbol) (m: Move) (mtc: MicroMTCombinator) : MicroMTCombinator =
+        let runner shift =
+            let mt = runMMTC mtc 0
+            let freshState = mt.states.MaximumElement + 1
+            let newStep = ((0, fromS), (freshState, toS, m))
+            new MicroMT(shift, mt.finalStates, Set.add freshState mt.outerStates, newStep :: mt.delta)
+        MMTC runner
+
     let dup (states: list<DeltaFuncContents>) : list<DeltaFuncContents> =
         let start : int = fold1 (fun ((q, _), (p, _, _)) -> min q p) (fun m ((q, _), (p, _, _)) -> min q p |> min m) states
         let fin   : int = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m) -1 states
