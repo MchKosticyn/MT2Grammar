@@ -107,13 +107,15 @@ module Primes =
                      (Set.union finalStates mt.finalStates)
                      (fun lastState ->
                         ((0, fromL), (shift, toL, mv))
-                        :: substStep outerState lastState mt.delta
+                        :: substStepsOfDelta outerState lastState mt.delta
                         @ mergeDeltas lastState)
                      mtss
         loop 1 Set.empty Set.empty (fun _ -> []) cases
 
-    let cycle (mt: MicroMTCombinator) : MicroMTCombinator =
-        __notImplemented__()
+    let cycle (mtc: MicroMTCombinator) : MicroMTCombinator =
+        let mt = runMMTC mtc 0
+        let outerState = mt.outerStates.MaximumElement
+        mkMMTCombFin mt.finalStates (Set.remove outerState mt.states) <| substStepsOfDelta outerState 0 mt.delta
 
     let addToInitial (fromS: trackSymbol) (toS: trackSymbol) (m: Move) (mtc: MicroMTCombinator) : MicroMTCombinator =
         let runner shift =
