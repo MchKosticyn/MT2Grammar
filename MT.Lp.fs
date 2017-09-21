@@ -207,6 +207,128 @@ module Primes =
         |> addToInitial Blank Blank Left // N]BxBn
         >> CLEAN
 
+    let INSERT_Sharp = // nBxBn[B] -> nBx]Bn#
+        [((0, Blank), (1, Sharp, Left))] // nBxBn]#
+        @ skipAlpha 1 1 Left // nBx[B]n#
+        @ skipBlank 1 2 Left // nBx]Bn#
+        |> mkMMTComb [2]
+
+    let GOTO_Sharp = // [NBx# -> NBx]#
+        skipNAlpha 0 0 Right
+        @ skipBlank 0 1 Right
+        @ skipAlpha 1 1 Right
+        @ [((1, Sharp), (2, Sharp, Left))]
+        |> mkMMTComb [2]
+
+    let UNSAFE_DEC_MID = // n]B -> {n-1}]B, n >= 1 for proper work
+        [
+            ((0, Zero), (0, One, Left))
+            ((0, One), (1, Zero, Right))
+        ]
+        @ skipAlpha 1 1 Right
+        @ skipBlank 1 2 Left
+        |> mkMMTComb [2]
+
+    let RIGHT_MINUS_MID = // x]Bn# -> $ | if n <= x then xX'B[{1^t}#g (lower st) else xB{n-x}[B] (higher st)
+        let SHIFT_Sharp = // n[NBxs]#y -> nN]Bx#sy
+            let SWAP_Sharp = // nNBxs]#y -> nN]Bx#sy
+                [
+                    ((0, Zero), (1, Sharp, Right))
+                    ((1, Sharp), (3, Zero, Left))
+                    ((0, One), (2, Sharp, Right))
+                    ((2, Sharp), (3, One, Left))
+                    ((3, Sharp), (4, Sharp, Left))
+                ]
+                @ skipAlpha 4 4 Left
+                @ skipBlank 4 5 Left
+                |> mkMMTComb [5]
+
+            mkMMTComb [0] <| skipAlpha 0 0 Left
+            >> GOTO_Sharp
+            >> SWAP_Sharp
+
+        let DEC_L = // xX'Bt]# -> if n <= x then xX'B[{1^t}#g else xX'B[{t-1}]#
+            [
+                ((0, Blank), (1, Blank, Right)) // xX'[B]{1^t}#g -> xX'B[{1^t}#g //// n <= x, so RETURN
+                ((0, Zero), (0, One, Left)) // \ DEC
+                ((0, One), (2, Zero, Left)) // / DEC
+            ]
+            |> mkMMTComb [1; 2]
+
+        let CAST_AND_CLEAN = // B[XB{0*}#t -> BxB{0+}t[B]
+            castNAlphaToAlpha 0 0 Right
+            @ skipBlank 0 1 Right
+            @ [
+                ((1, Zero), (1, Zero, Right))
+                ((1, Sharp), (2, Zero, Right))
+            ]
+            @ skipAlpha 2 2 Right
+            |> mkMMTComb [2]
+
+        cycle (
+            mkMMTComb [0] <| skipNAlpha 0 0 Left // x[X]Bt# -> x]XBt#
+            >> fork [
+                (Zero, NZero, Right, mkMMTComb [1] []) // x[0]X'Bt# -> x2[X'Bt#
+                (One, NOne, Right, GOTO_Sharp >> DEC_L) // x[1]X'Bt# -> x3[X'Bt# -> x3X'[B{t-1}]#
+            ]
+            >> SHIFT_Sharp) // the only escape from cycle is `1` state of DEC_L
+        |> addToInitial Blank Blank Right // B[XB{0*}#t // results in 2 outer states! //// n -= x SUCCEDED
+        >> CAST_AND_CLEAN
+
+    let RIGHT_MODULO_MID = // nBx]Bn# -> nBx'X'B[{1^t}#g
+        cycle (                             //// while right > mid
+               RIGHT_MINUS_MID              ////     right -= mid
+            >> INSERT_Sharp)
+
+    let CHK_RIGHT_ROUGHLY_ZERO_EQUAL = // nBx'X'B[{1^t}#g -> $ (g == 0) | [nBx
+        [
+            ((0, One), (0, Blank, Right)) // nBx{B^t+1}[#]g
+            ((0, Sharp), (1, Blank, Right)) // nBx{B^t+2}[g
+            ((1, Zero), (1, Blank, Right)) // nBx{B+}[k, where k = B or 1g'
+            ((1, Blank), (2, Blank, Right)) // 2 is DEAD END
+            ((1, One), (3, Blank, Right)) // nBx{B+}[g', later are CLEAN steps
+            ((3, Zero), (3, Blank, Right))
+            ((3, One), (3, Blank, Right))
+            ((3, Blank), (4, Blank, Left)) // nBx{B+}]
+        ]
+        // later are CAST_MID steps
+        @ skipBlank 4 4 Left // nBxY]
+        @ castNAlphaToAlpha 4 4 Left // nBx]y
+        @ skipAlpha 4 5 Left
+        @ skipAlpha 5 5 Left // n[B]xy
+        @ skipBlank 5 6 Left
+        @ skipAlpha 6 6 Left
+        @ skipBlank 6 7 Right
+        |> mkMMTComb [7]
+
+    let CHK_MID_ONE_EQUAL = // nBx]B -> $ (x == 1) | n]Bx#
+        [
+            ((0, One), (1, One, Left)) // found 1
+            ((0, Zero), (2, Zero, Right)) // nBx[B]
+            ((1, Zero), (1, Zero, Left)) // keep checking 1 == 01 == 001 == ...
+            ((1, Blank), (3, Blank, Right)) // (x == 1) GOOD END
+            ((1, One), (2, One, Right)) // nB[x]B
+        ]
+        @ skipAlpha 2 2 Right // nBx[B]
+        @ [((2, Blank), (4, Sharp, Left))] // nBx]#
+        @ skipAlpha 4 4 Left
+        @ skipBlank 4 5 Left
+        |> mkMMTCombFin (set[3]) (set[5]) // FINAL is 3, Outer is 5
+
+    let MAIN =
+        CHK01                                   //// if n = 0 or n = 1 then return false
+        >> COPY                                 //// mid := n // mid >= 2
+        >> cycle (
+               COPY2                            //// right := n
+            >> GOTO_RIGHT
+            >> INSERT_Sharp
+            >> UNSAFE_DEC_MID                   //// mid-- // mid >= 1
+            >> CHK_MID_ONE_EQUAL // beep!       //// if mid = 1 then return true
+            >> RIGHT_MODULO_MID                 //// right %= mid
+            >> CHK_RIGHT_ROUGHLY_ZERO_EQUAL     //// IF right = 0 THEN return false ELSE right := <blanks>
+        )
+
+
 module Test =
     open Primes
     [<EntryPoint>]
