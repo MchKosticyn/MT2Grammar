@@ -4,8 +4,6 @@ open MT.ToGrammar
 module Utils =
     let __notImplemented__() = failwith "Not Implemented"
 
-    let fold1 (once: 'a -> 'b) (f: 'b -> 'a -> 'b) = function x::xs -> List.fold f (once x) xs
-
     let mkMT (d: deltaFunc) (alpha: Set<letterOfAlphabet>) (start: state) (fin: state Set) : MT =
         let collectStatesAndSymbols (states: state Set, track: trackSymbol Set) (stQ, symbA) (stP, symbB, _) =
             let states' = states.Add(stQ).Add(stP)
@@ -20,7 +18,6 @@ module Primes =
     open Utils
 
     type DeltaFuncContents = (state * trackSymbol) * (state * trackSymbol * Move)
-    let collectMaxState = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m) -1
     type MicroMT =
         val maxState: state
         val delta: list<DeltaFuncContents>
@@ -39,23 +36,18 @@ module Primes =
             let outerStates = shiftBy outerStates
             let delta : list<DeltaFuncContents> =
                 List.map (fun ((p, a), (q, b, m)) -> ((p + shift, a), (q + shift, b, m))) delta
-            let maxState = max outerStates.MaximumElement <| (collectMaxState delta)
+            let maxState = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m)
+                                     (if outerStates.IsEmpty then -1 else outerStates.MaximumElement)
+                                     delta
             assert (Set.isEmpty <| Set.intersect finalStates outerStates) // final states can't be outer
             {maxState=maxState; delta=delta; initialState=shift; outerStates=outerStates; finalStates=finalStates}
-        new (shift: int, outerStates: Set<state>, delta: list<DeltaFuncContents>) =
-            new MicroMT(shift, set[], outerStates, delta)
-        new (shift: int, outerState: state, delta: list<DeltaFuncContents>) =
-            new MicroMT(shift, set[], Set.singleton outerState, delta)
 
     type MicroMTCombinator = MMTC of (int -> MicroMT)
     let mkMMTCombFin (finalStates: Set<state>) (outerStates: Set<state>) (delta: list<DeltaFuncContents>) : MicroMTCombinator =
         MMTC <| fun shift -> new MicroMT(shift, finalStates, outerStates, delta)
-    let mkMMTComb outer = mkMMTCombFin Set.empty (Set.ofList outer)
+    let mkMMTComb = Set.ofList >> mkMMTCombFin Set.empty
 
-    let mkSingleMMTC a b m = mkMMTComb [1] [((0, a), (1, b, m))]
-
-    let runMMTC (x: MicroMTCombinator) shift =
-        match x with MMTC f -> f shift
+    let runMMTC = function MMTC f -> f
 
     let (>>) (a: MicroMTCombinator) (b: MicroMTCombinator) : MicroMTCombinator =
         // connects Maximum `a` outer state with `b` initial state
@@ -118,25 +110,10 @@ module Primes =
 
     let addToInitial (fromS: trackSymbol) (toS: trackSymbol) (m: Move) (mtc: MicroMTCombinator) : MicroMTCombinator =
         // adds new Maximum outer state
-        let runner shift =
-            let mt = runMMTC mtc 0
-            let freshState = mt.maxState + 1
-            let newStep = ((0, fromS), (freshState, toS, m))
-            new MicroMT(shift, mt.finalStates, Set.add freshState mt.outerStates, newStep :: mt.delta)
-        MMTC runner
-
-    let dup (states: list<DeltaFuncContents>) : list<DeltaFuncContents> =
-        // states -- sth with 0 and 2. return -- sth and sth[0 -> 1; 2 -> 3]
-        let flipT x =
-            if x = Zero then One
-            else if x = NZero then NOne
-            else x
-
-        let start : int = fold1 (fun ((q, _), (p, _, _)) -> min q p) (fun m ((q, _), (p, _, _)) -> min q p |> min m) states
-        let fin   : int = collectMaxState states
-        let shiftRest q = if q = start || q = fin then q else q + 1
-        let flip = List.map (fun ((q, a), (p, b, m)) -> ((shiftRest q, flipT a), (shiftRest p, flipT b, m)))
-        states @ flip states
+        let mt = runMMTC mtc 0
+        let freshState = mt.maxState + 1
+        let newStep = ((0, fromS), (freshState, toS, m))
+        mkMMTCombFin mt.finalStates <| Set.add freshState mt.outerStates <| newStep :: mt.delta
 
 
     // BAD: 1
@@ -153,13 +130,18 @@ module Primes =
         skipAlpha 0 1 Left // [B]n
         @ [((1, Blank), (2, Sharp, Right))] // #[n
         @ castNAlphaToAlpha 2 2 Right // #x[n, x: NA, n: A
-        @ dup ([
-                ((2, Zero), (3, Sharp, Left)) // [#]#n'
-                ((3, Sharp), (5, Zero, Right)) // 0[#]n'
-                ((5, Sharp), (7, Sharp, Right)) // 0#[n'
-                ((7, Blank), (9, NZero, Left)) // 0#n'N[B] -> 0#n'N]2
-            ]
-            @ skipAll 7 7 Right) // 0#[n' -> 0#n'[B]
+        @ [
+            ((2, TLetter '0'), (3, ExSymbol '#', Left))   // [#]#n'
+            ((3, ExSymbol '#'), (5, TLetter '0', Right))  // 0[#]n'
+            ((5, ExSymbol '#'), (7, ExSymbol '#', Right)) // 0#[n'
+            ((7, ExSymbol 'B'), (9, TLetter '2', Left))   // 0#n'N[B] -> 0#n'N]2
+            ((2, TLetter '1'), (4, ExSymbol '#', Left))   /// same
+            ((4, ExSymbol '#'), (6, TLetter '1', Right))  /// for
+            ((6, ExSymbol '#'), (8, ExSymbol '#', Right)) /// the
+            ((8, ExSymbol 'B'), (9, TLetter '3', Left))   /// ones
+        ]
+        @ skipAll 7 7 Right // 0#[n' -> 0#n'[B]
+        @ skipAll 8 8 Right
         @ skipAll 9 9 Left // 0#n'N]2 -> 0[#]n'N2  (merge forks)
         @ [((9, Sharp), (2, Sharp, Right))] // 0#[n'N2
         @ skipBlank 2 10 Left // n#n[B] -> n#n]
@@ -195,7 +177,7 @@ module Primes =
                 if x = Zero then NZero
                 else if x = One then NOne
                 else x
-            (symb, cast symb, Right, GOTO_RIGHT >> mkSingleMMTC Blank symb Left) // [snBxBa -> SnBxBa]s
+            (symb, cast symb, Right, GOTO_RIGHT >> mkMMTComb [1] [((0, Blank), (1, symb, Left))]) // [snBxBa -> SnBxBa]s
         cycle (
             fork [
                 copy1symb Zero
@@ -330,10 +312,3 @@ module BuildMT =
     let PrimesMT =
         let mt = Primes.runMMTC Primes.MAIN 0
         Utils.mkMT (Map.ofList mt.delta) Primes.alpha mt.initialState mt.finalStates
-
-module Test =
-    open Primes
-    [<EntryPoint>]
-    let main _ =
-
-        0
