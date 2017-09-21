@@ -27,6 +27,11 @@ module Primes =
         val outerStates: Set<state> // connectors
         val finalStates: Set<state> // On which MT will 'beep'
 
+        override this.ToString() =
+            System.String.Format("INITIAL: {0}\nOUTERS: {1}\nFINALS: {2}\nDELTA:\n{3}",
+                                 this.initialState, this.outerStates, this.finalStates,
+                                 String.concat "\n" <| List.map (fun x -> x.ToString()) this.delta)
+
         new () = {states=set[]; delta=[]; initialState=0; outerStates=set[]; finalStates=set[]}
         new (shift: int, finalStates: Set<state>, outerStates: Set<state>, delta: list<DeltaFuncContents>) =
             let shiftBy = Set.map ((+) shift)
