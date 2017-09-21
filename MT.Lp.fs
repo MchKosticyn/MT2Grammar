@@ -326,6 +326,10 @@ module Primes =
             >> CHK_RIGHT_ROUGHLY_ZERO_EQUAL     //// IF right = 0 THEN return false ELSE right := <blanks>
         )
 
+module BuildMT =
+    let PrimesMT =
+        let mt = Primes.runMMTC Primes.MAIN 0
+        Utils.mkMT (Map.ofList mt.delta) Primes.alpha mt.initialState mt.finalStates
 
 module Test =
     open Primes
