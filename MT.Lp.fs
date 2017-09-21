@@ -39,8 +39,10 @@ module Primes =
             let outerStates = shiftBy outerStates
             let delta : list<DeltaFuncContents> =
                 List.map (fun ((p, a), (q, b, m)) -> ((p + shift, a), (q + shift, b, m))) delta
-            let states = List.fold (fun stts ((p, _), (q, _, _)) -> Set.add p stts |> Set.add q) (set[]) delta
-            assert (Set.isSuperset states <| Set.union finalStates outerStates) // states are ALL states
+            let states =
+                List.fold (fun stts ((p, _), (q, _, _)) -> Set.add p stts |> Set.add q) (set[]) delta
+                |> Set.union outerStates
+            assert (Set.isSuperset states finalStates) // states are ALL states
             assert (Set.isEmpty <| Set.intersect finalStates outerStates) // final states can't be outer
             {states=states; delta=delta; initialState=shift; outerStates=outerStates; finalStates=finalStates}
         new (shift: int, outerStates: Set<state>, delta: list<DeltaFuncContents>) =
@@ -59,13 +61,13 @@ module Primes =
         match x with MMTC f -> f shift
 
     let (>>) (a: MicroMTCombinator) (b: MicroMTCombinator) : MicroMTCombinator =
+        // connects Maximum `a` outer state with `b` initial state
         let runner shift =
             let left = runMMTC a shift
-            if left.outerStates.Count = 1
-            then
-                let right = runMMTC b left.outerStates.MinimumElement
-                new MicroMT(shift, Set.union left.finalStates right.finalStates, right.outerStates, left.delta @ right.delta)
-            else __notImplemented__()
+            let outerState = left.outerStates.MaximumElement
+            let right = runMMTC b outerState
+            new MicroMT(shift, Set.union left.finalStates right.finalStates,
+                        Set.union right.outerStates <| Set.remove outerState left.outerStates, left.delta @ right.delta)
         MMTC runner
 
 
@@ -101,28 +103,32 @@ module Primes =
         List.map (fun ((q, a), (p, b, m)) -> ((substState q, a), (substState p, b, m)))
 
     let fork (cases: list<trackSymbol * trackSymbol * Move * MicroMTCombinator>) : MicroMTCombinator =
-        let rec loop shift states finalStates (mergeDeltas: state -> list<DeltaFuncContents>)=
+        let rec loop shift outerStates finalStates (mergeDeltas: state -> list<DeltaFuncContents>) =
             function
-            | [] -> mkMMTCombFin finalStates (set[shift]) (mergeDeltas shift)
+            | [] -> mkMMTCombFin finalStates (Set.add shift outerStates) (mergeDeltas shift)
             | (fromL, toL, mv, mts)::mtss ->
                 let mt = runMMTC mts shift
                 let outerState = mt.outerStates.MaximumElement
                 loop (mt.states.MaximumElement + 1)
-                     (Set.union states <| Set.remove outerState mt.states)
+                     (Set.union outerStates <| Set.remove outerState mt.outerStates)
                      (Set.union finalStates mt.finalStates)
                      (fun lastState ->
-                        ((0, fromL), (shift, toL, mv))
-                        :: substStepsOfDelta outerState lastState mt.delta
+                        if List.isEmpty mt.delta // confluent MT
+                        then [((0, fromL), (lastState, toL, mv))]
+                        else
+                            ((0, fromL), (shift, toL, mv))
+                            :: substStepsOfDelta outerState lastState mt.delta
                         @ mergeDeltas lastState)
                      mtss
         loop 1 Set.empty Set.empty (fun _ -> []) cases
 
-    let cycle (mtc: MicroMTCombinator) : MicroMTCombinator =
+    let cycle (mtc: MicroMTCombinator) : MicroMTCombinator = // loops on Maximum outer state
         let mt = runMMTC mtc 0
         let outerState = mt.outerStates.MaximumElement
-        mkMMTCombFin mt.finalStates Set.empty <| substStepsOfDelta outerState 0 mt.delta
+        mkMMTCombFin mt.finalStates <| Set.remove outerState mt.outerStates <| substStepsOfDelta outerState 0 mt.delta
 
     let addToInitial (fromS: trackSymbol) (toS: trackSymbol) (m: Move) (mtc: MicroMTCombinator) : MicroMTCombinator =
+        // adds new Maximum outer state
         let runner shift =
             let mt = runMMTC mtc 0
             let freshState = mt.states.MaximumElement + 1
@@ -131,6 +137,7 @@ module Primes =
         MMTC runner
 
     let dup (states: list<DeltaFuncContents>) : list<DeltaFuncContents> =
+        // states -- sth with 0 and 2. return -- sth and sth[0 -> 1; 2 -> 3]
         let start : int = fold1 (fun ((q, _), (p, _, _)) -> min q p) (fun m ((q, _), (p, _, _)) -> min q p |> min m) states
         let fin   : int = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m) -1 states
         let shiftRest q = if q = start || q = fin then q else q + 1
