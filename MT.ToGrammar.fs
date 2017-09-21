@@ -111,8 +111,3 @@ let transformation ((states, alphabet, tapeAlph, delta, initialState, finalState
     in
     let prod = Set.unionMany [firstPhase; secondPhase; thirdPhase] in
     (Variables, alphabet, prod, 'A')
-
-[<EntryPoint>]
-let main argv =
-    printfn "%A" argv
-    0 // return an integer exit code

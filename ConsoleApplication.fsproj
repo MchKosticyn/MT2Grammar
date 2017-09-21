@@ -47,8 +47,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Program.fs" />
+    <Compile Include="MT.ToGrammar.fs" />
     <Compile Include="MT.Lp.fs" />
+    <Compile Include="Main.fs" />
     <Content Include="packages.config" />
     <None Include="App.config" />
   </ItemGroup>
