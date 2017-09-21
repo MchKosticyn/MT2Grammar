@@ -1,22 +1,7 @@
 namespace MT.Lp
 open MT.ToGrammar
 
-module Utils =
-    let __notImplemented__() = failwith "Not Implemented"
-
-    let mkMT (d: deltaFunc) (alpha: Set<letterOfAlphabet>) (start: state) (fin: state Set) : MT =
-        let collectStatesAndSymbols (states: state Set, track: trackSymbol Set) (stQ, symbA) (stP, symbB, _) =
-            let states' = states.Add(stQ).Add(stP)
-            let track' =
-                let add = function TLetter _ as s -> Set.add s | _ -> id
-                add symbA track |> add symbB
-            (states', track')
-        let (states, track) = Map.fold collectStatesAndSymbols (Set.empty, Set.empty) d
-        (states, alpha, track, d, start, fin)
-
-module Primes =
-    open Utils
-
+module private MicroMT =
     type DeltaFuncContents = (state * trackSymbol) * (state * trackSymbol * Move)
     type MicroMT =
         val maxState: state
@@ -59,7 +44,8 @@ module Primes =
                         Set.union right.outerStates <| Set.remove outerState left.outerStates, left.delta @ right.delta)
         MMTC runner
 
-
+module private BuilderFunctions =
+    open MicroMT
     let alpha : Set<letterOfAlphabet> = set ['0'; '1']
     let Blank = ExSymbol 'B'
     let Sharp = ExSymbol '#'
@@ -115,7 +101,9 @@ module Primes =
         let newStep = ((0, fromS), (freshState, toS, m))
         mkMMTCombFin mt.finalStates <| Set.add freshState mt.outerStates <| newStep :: mt.delta
 
-
+module private Primes =
+    open MicroMT
+    open BuilderFunctions
     // BAD: 1
     let CHK01 : MicroMTCombinator = // [n -> $ | [n
         [
@@ -310,5 +298,14 @@ module Primes =
 
 module BuildMT =
     let PrimesMT =
-        let mt = Primes.runMMTC Primes.MAIN 0
-        Utils.mkMT (Map.ofList mt.delta) Primes.alpha mt.initialState mt.finalStates
+        let mkMT (d: deltaFunc) (alpha: Set<letterOfAlphabet>) (start: state) (fin: state Set) : MT =
+            let collectStatesAndSymbols (states: state Set, track: trackSymbol Set) (stQ, symbA) (stP, symbB, _) =
+                let states' = states.Add(stQ).Add(stP)
+                let track' =
+                    let add = function TLetter _ as s -> Set.add s | _ -> id
+                    add symbA track |> add symbB
+                (states', track')
+            let (states, track) = Map.fold collectStatesAndSymbols (Set.empty, Set.empty) d
+            (states, alpha, track, d, start, fin)
+        let mt = MicroMT.runMMTC Primes.MAIN 0
+        mkMT (Map.ofList mt.delta) BuilderFunctions.alpha mt.initialState mt.finalStates
