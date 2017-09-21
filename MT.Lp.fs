@@ -32,7 +32,6 @@ module Primes =
                                  this.initialState, this.outerStates, this.finalStates,
                                  String.concat "\n" <| List.map (fun x -> x.ToString()) this.delta)
 
-        new () = {states=set[]; delta=[]; initialState=0; outerStates=set[]; finalStates=set[]}
         new (shift: int, finalStates: Set<state>, outerStates: Set<state>, delta: list<DeltaFuncContents>) =
             let shiftBy = Set.map ((+) shift)
             let finalStates = shiftBy finalStates
@@ -79,14 +78,6 @@ module Primes =
     let NZero = TLetter '2'
     let NOne = TLetter '3'
 
-    let flipT x =
-        if x = Zero then One
-        else if x = NZero then NOne
-        else x
-    let cast x =
-        if x = Zero then NZero
-        else if x = One then NOne
-        else x
     let skipBlank q p m : list<DeltaFuncContents> =
         [((q, Blank), (p, Blank, m))]
     let skipAlpha (q: state) (p: state) (m: Move) : list<DeltaFuncContents> =
@@ -138,6 +129,11 @@ module Primes =
 
     let dup (states: list<DeltaFuncContents>) : list<DeltaFuncContents> =
         // states -- sth with 0 and 2. return -- sth and sth[0 -> 1; 2 -> 3]
+        let flipT x =
+            if x = Zero then One
+            else if x = NZero then NOne
+            else x
+
         let start : int = fold1 (fun ((q, _), (p, _, _)) -> min q p) (fun m ((q, _), (p, _, _)) -> min q p |> min m) states
         let fin   : int = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m) -1 states
         let shiftRest q = if q = start || q = fin then q else q + 1
@@ -197,6 +193,10 @@ module Primes =
             @ skipBlank 0 1 Right
             |> mkMMTComb [1]
         let copy1symb symb =
+            let cast x =
+                if x = Zero then NZero
+                else if x = One then NOne
+                else x
             (symb, cast symb, Right, GOTO_RIGHT >> mkSingleMMTC Blank symb Left) // [snBxBa -> SnBxBa]s
         cycle (
             fork [
