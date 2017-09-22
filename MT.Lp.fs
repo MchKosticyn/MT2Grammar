@@ -22,7 +22,7 @@ module private MicroMT =
             let delta : list<DeltaFuncContents> =
                 List.map (fun ((p, a), (q, b, m)) -> ((p + shift, a), (q + shift, b, m))) delta
             let maxState = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m)
-                                     (if outerStates.IsEmpty then -1 else outerStates.MaximumElement)
+                                     (if outerStates.IsEmpty then -1 else outerStates.MaximumElement) // outer states may not be included in delta
                                      delta
             assert (Set.isEmpty <| Set.intersect finalStates outerStates) // final states can't be outer
             {maxState=maxState; delta=delta; initialState=shift; outerStates=outerStates; finalStates=finalStates}
@@ -47,7 +47,6 @@ module private MicroMT =
 module private BuilderFunctions =
     open MicroMT
     let alpha : Set<letterOfAlphabet> = set ['0'; '1']
-    let Blank = ExSymbol 'B'
     let Sharp = ExSymbol '#'
     let Zero = TLetter '0'
     let One = TLetter '1'
@@ -72,7 +71,7 @@ module private BuilderFunctions =
     let fork (cases: list<trackSymbol * trackSymbol * Move * MicroMTCombinator>) : MicroMTCombinator =
         let rec loop shift outerStates finalStates (mergeDeltas: state -> list<DeltaFuncContents>) =
             function
-            | [] -> mkMMTCombFin finalStates (Set.add shift outerStates) (mergeDeltas shift)
+            | [] -> mkMMTCombFin finalStates <| Set.add shift outerStates <| mergeDeltas shift
             | (fromL, toL, mv, mts)::mtss ->
                 let mt = runMMTC mts shift
                 let outerState = mt.outerStates.MaximumElement
@@ -301,9 +300,7 @@ module BuildMT =
         let mkMT (d: deltaFunc) (alpha: Set<letterOfAlphabet>) (start: state) (fin: state Set) : MT =
             let collectStatesAndSymbols (states: state Set, track: trackSymbol Set) (stQ, symbA) (stP, symbB, _) =
                 let states' = states.Add(stQ).Add(stP)
-                let track' =
-                    let add = function TLetter _ as s -> Set.add s | _ -> id
-                    add symbA track |> add symbB
+                let track' = Set.add symbA <| Set.add symbB track
                 (states', track')
             let (states, track) = Map.fold collectStatesAndSymbols (Set.empty, Set.empty) d
             (states, alpha, track, d, start, fin)
