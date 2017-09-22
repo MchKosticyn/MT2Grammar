@@ -33,13 +33,18 @@ let mkTerminal = function
         | Eps -> E
 
 // Help functions
-let Coroutine lambda x y z =
+let Coroutine2 lambda x y =
+    seq { for a in x do
+          for b in y do
+              yield lambda a b }
+
+let Coroutine3 lambda x y z =
     seq { for a in x do
           for b in y do
           for c in z do
               yield lambda a b c }
 
-let allTuples exAlphabet tapeAlphabet = List.ofSeq <| Coroutine (fun a b c -> tupleSymbol a b) exAlphabet tapeAlphabet Set.empty
+let allTuples exAlphabet tapeAlphabet = List.ofSeq <| Coroutine2 (fun a b -> tupleSymbol a b) exAlphabet tapeAlphabet
 
 let fromSymbolToVar =
     Set.map (function
@@ -85,8 +90,8 @@ let transformation ((states, alphabet, tapeAlph, delta, initialState, finalState
     in
     let secondPhase =
         Map.fold (fun acc (state, symbol) (newState, newSymbol, shift) ->
-            let shiftRight set1 set2 = Set.ofSeq <| Coroutine (fun a b c -> mkProduction [mkState state; a] [b;mkState newState]) set1 set2 Set.empty
-            let shiftLeft set1 set2 set3 = Set.ofSeq <| Coroutine (fun a b c -> mkProduction [a;mkState state;b] [mkState newState;a;c]) set1 set2 set3
+            let shiftRight set1 set2 = Set.ofSeq <| Coroutine2 (fun a b -> mkProduction [mkState state; a] [b;mkState newState]) set1 set2
+            let shiftLeft set1 set2 set3 = Set.ofSeq <| Coroutine3 (fun a b c -> mkProduction [a;mkState state;b] [mkState newState;a;c]) set1 set2 set3
             match shift with
             | Right -> shiftRight (getNums <| mapOfSymb symbol AllTuplesMap) (getNums <| mapOfSymb newSymbol AllTuplesMap)
             | Left -> shiftLeft (getNums <| AllTuplesMap) (getNums <| mapOfSymb symbol AllTuplesMap) (getNums <| mapOfSymb newSymbol AllTuplesMap)
