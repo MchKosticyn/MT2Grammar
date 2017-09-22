@@ -103,15 +103,21 @@ module private BuilderFunctions =
 module private Primes =
     open MicroMT
     open BuilderFunctions
+    open LBA.ToTypeOne
     // BAD: 1
-    let CHK01 : MicroMTCombinator = // [n -> $ | [n
+    let CHK01 : MicroMTCombinator = // [n -> $ | [B]n
         [
             ((0, Zero), (1, Blank, Right)) // B[B] $
             ((0, One), (2, One, Right)) // 1[..
         ]
         @ skipBlank 2 1 Right // 1B[B] $
-        @ [((2, One), (3, One, Left))] // [1]..
-        |> mkMMTComb [3] // out is 3
+        @ [
+            ((2, One), (3, One, Left)) // [B]1..
+            ((3, Blank), (4, Blank, Left)) // [B]B1..
+            ((4, Blank), (5, InitSymb, Right)) // C[B]1..
+        ]
+        @ skipBlank 5 5 Right
+        |> mkMMTComb [5] // out is 5
 
     let COPY : MicroMTCombinator = // [n -> [nBn
         skipAlpha 0 1 Left // [B]n
@@ -174,13 +180,19 @@ module private Primes =
         |> addToInitial Blank Blank Left // N]BxBn
         >> CLEAN
 
-    let INSERT_Sharp = // nBxBn[B] -> nBx]Bn#
-        [((0, Blank), (1, Sharp, Left))] // nBxBn]#
-        @ skipAlpha 1 1 Left // nBx[B]n#
-        @ skipBlank 1 2 Left // nBx]Bn#
-        |> mkMMTComb [2]
+    let INSERT_Sharp_End = // nBxBn[B] -> nBx]Bn#$
+        [
+            ((0, Blank), (1, Sharp, Right)) // nBxBn#[B]
+            ((1, Blank), (2, EndSymb, Left)) // nBxBn[#]$
+            ((1, EndSymb), (2, EndSymb, Left)) // already have $
+            ((2, Sharp), (2, Sharp, Left))
 
-    let GOTO_Sharp = // [NBx# -> NBx]#
+        ]
+        @ skipAlpha 2 2 Left // nBx[B]n#
+        @ skipBlank 2 3 Left // nBx]Bn#
+        |> mkMMTComb [3]
+
+    let GOTO_Sharp = // [NB]x# -> NBx]#
         skipNAlpha 0 0 Right
         @ skipBlank 0 1 Right
         @ skipAlpha 1 1 Right
@@ -210,8 +222,8 @@ module private Primes =
                 @ skipBlank 4 5 Left
                 |> mkMMTComb [5]
 
-            mkMMTComb [0] <| skipAlpha 0 0 Left
-            >> GOTO_Sharp
+            mkMMTComb [0] <| skipAlpha 0 0 Left // n[NB]xs#y
+            >> GOTO_Sharp // nNBxs]#y
             >> SWAP_Sharp
 
         let DEC_L = // xX'Bt]# -> if n <= x then xX'B[{1^t}#g else xX'B[{t-1}]#
@@ -245,28 +257,41 @@ module private Primes =
     let RIGHT_MODULO_MID = // nBx]Bn# -> nBx'X'B[{1^t}#g
         cycle (                             //// while right > mid
                RIGHT_MINUS_MID              ////     right -= mid
-            >> INSERT_Sharp)
+            >> INSERT_Sharp_End)
 
     let CHK_RIGHT_ROUGHLY_ZERO_EQUAL = // nBx'X'B[{1^t}#g -> $ (g == 0) | [nBx
-        [
-            ((0, One), (0, Blank, Right)) // nBx{B^t+1}[#]g
-            ((0, Sharp), (1, Blank, Right)) // nBx{B^t+2}[g
-            ((1, Zero), (1, Blank, Right)) // nBx{B+}[k, where k = B or 1g'
-            ((1, Blank), (2, Blank, Right)) // 2 is DEAD END
-            ((1, One), (3, Blank, Right)) // nBx{B+}[g', later are CLEAN steps
-            ((3, Zero), (3, Blank, Right))
-            ((3, One), (3, Blank, Right))
-            ((3, Blank), (4, Blank, Left)) // nBx{B+}]
+        let SHIFT_LEFT = // [#]gB$ -> g]BB$
+            [
+                ((0, Sharp), (1, Sharp, Right)) // #[gB$
+                ((1, Zero), (2, Sharp, Left))   // #]#g'B$
+                ((2, Sharp), (0, Zero, Right))  // 0[#]g'B$
+                ((1, One), (3, Sharp, Left))    // #]#g'B$
+                ((3, Sharp), (0, One, Right))   // 1[#]g'B$
+                ((1, Blank), (4, Blank, Left))  // g[#]B$
+                ((4, Sharp), (5, Blank, Left)) // g]BB$
+            ]
+            |> mkMMTComb [5]
+
+        let CAST_MID = // nBx[{B+}]$ -> [nBxy
+            skipBlank 0 0 Left // nBxY]
+            @ castNAlphaToAlpha 0 0 Left // nBx]y
+            @ skipAlpha 0 1 Left
+            @ skipAlpha 1 1 Left // n[B]xy
+            @ skipBlank 1 2 Left
+            @ skipAlpha 2 2 Left
+            @ skipBlank 2 3 Right
+            |> mkMMTComb [3]
+
+        mkMMTComb [0] [((0, One), (0, Blank, Right))] // nBx{B^t+1}[#]g
+        >> SHIFT_LEFT // nBx{B^t+1}g]BB$
+        >> mkMMTComb [1] [
+            ((0, Zero), (0, Blank, Left)) // nBx{B^t+1}k]{BB+}$, where k = g'1 or nothing
+            ((0, Blank), (2, Blank, Left)) // 2 is DEAD END
+            ((0, One), (1, Blank, Left)) // nBx{B^t+1}g']{B+}$
+            ((1, Zero), (1, Blank, Left))
+            ((1, One), (1, Blank, Left)) // nBx[{B+}]$
         ]
-        // later are CAST_MID steps
-        @ skipBlank 4 4 Left // nBxY]
-        @ castNAlphaToAlpha 4 4 Left // nBx]y
-        @ skipAlpha 4 5 Left
-        @ skipAlpha 5 5 Left // n[B]xy
-        @ skipBlank 5 6 Left
-        @ skipAlpha 6 6 Left
-        @ skipBlank 6 7 Right
-        |> mkMMTComb [7]
+        >> CAST_MID
 
     let CHK_MID_ONE_EQUAL = // nBx]B -> $ (x == 1) | n]Bx#
         [
@@ -288,7 +313,7 @@ module private Primes =
         >> cycle (
                COPY2                            //// right := n
             >> GOTO_RIGHT
-            >> INSERT_Sharp
+            >> INSERT_Sharp_End
             >> UNSAFE_DEC_MID                   //// mid-- // mid >= 1
             >> CHK_MID_ONE_EQUAL // beep!       //// if mid = 1 then return true
             >> RIGHT_MODULO_MID                 //// right %= mid

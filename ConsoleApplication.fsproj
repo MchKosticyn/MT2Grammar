@@ -48,9 +48,9 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="MT.ToGrammar.fs" />
+    <Compile Include="LBA.ToTypeOne.fs" />
     <Compile Include="MT.Lp.fs" />
     <Compile Include="Main.fs" />
-    <Compile Include="LBA.ToTypeOne.fs" />
     <Content Include="packages.config" />
     <None Include="App.config" />
   </ItemGroup>
