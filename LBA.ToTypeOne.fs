@@ -10,15 +10,15 @@ module internal LBATypes =
     type axiom = char
     type VarAndVal = trackSymbol * letterOfAlphabet
     type CompoundNonTerminal =
-        | PtrAtLeftAllBounds of state * VarAndVal
-        | PtrAtSymbAllBounds of state * VarAndVal
-        | PtrAtRightAllBounds of VarAndVal * state
-        | PtrNoBounds of state * VarAndVal
-        | PtrAtSymbRightBound of state * VarAndVal
-        | PtrAtRightRightBound of VarAndVal * state
-        | LeftBoundAndSymb of VarAndVal
-        | VarAndVal of VarAndVal
-        | RightBoundAndSymb of VarAndVal
+        | PtrAtLeftAllBounds of state * VarAndVal   // [q, ¢, X, a, $]
+        | PtrAtSymbAllBounds of state * VarAndVal   // [¢, q, X, a, $]
+        | PtrAtRightAllBounds of VarAndVal * state  // [¢, X, a, q, $]
+        | PtrNoBounds of state * VarAndVal          // [q, X, a]
+        | PtrAtSymbRightBound of state * VarAndVal  // [q, X, a, $]
+        | PtrAtRightRightBound of VarAndVal * state // [X, a, q, $]
+        | LeftBoundAndSymb of VarAndVal             // [¢, X, a]
+        | VarAndVal of VarAndVal                    // [X, a]
+        | RightBoundAndSymb of VarAndVal            // [X, a, $]
     type NonTerminal =
         | RawNonTerminal of axiom
         | NumberedSymb of int
@@ -78,6 +78,10 @@ module internal LBAToGrammarOne =
         let Step1 =
             let rights = Map.filter (fun k -> function PtrAtLeftAllBounds(_, (TLetter x, y)) -> x = y | _ -> false) allNonTerminalsMap
             Set.map (fun i -> mkProduction [RawNonTerminal 'A'] [i]) <| getNums rights
+
+//        let ntPairs = Map.filter (fun _ -> function Ptr
+//        let Step9 =
+//            Coroutine2 (fun a ) alphabet <| Map.filter () allNonTerminalsMap
 
 //        let prod = List.map
 //            (fun vlvr -> mkProduction [RawNonTerminal 'A'] [mkPtrAtLeftAllBounds initialState vlvr])
