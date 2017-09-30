@@ -19,6 +19,8 @@ module internal LBATypes =
         | LeftBoundAndSymb of VarAndVal             // [¢, X, a]
         | VarAndVal of VarAndVal                    // [X, a]
         | RightBoundAndSymb of VarAndVal            // [X, a, $]
+        | PtrAtLeftLeftBound of state * VarAndVal   // [q, ¢, X, a]
+        | PtrAtSymbLeftBound of state * VarAndVal   // [¢, q, X, a]
     type NonTerminal =
         | RawNonTerminal of axiom
         | CompoundNonTerminal of CompoundNonTerminal
@@ -39,6 +41,8 @@ module internal GrammarOnePrimitives =
     let mkPtrNoBounds q Xa = PtrNoBounds(q, Xa)
     let mkPtrAtSymbRightBound q Xa = PtrAtSymbRightBound(q, Xa)
     let mkPtrAtRightRightBound q Xa = PtrAtRightRightBound(Xa, q)
+    let mkPtrAtLeftLeftBound q Xa = PtrAtLeftLeftBound(q, Xa)
+    let mkPtrAtSymbLeftBound q Xa = PtrAtSymbLeftBound(q, Xa)
     let mkProduction x y = (x, y)
 
 
@@ -56,34 +60,45 @@ module internal LBAToGrammarOne =
         let axiomA = RawNonTerminal 'A'
         let axiomB = RawNonTerminal 'B'
 
+
+        let allPtrAtLeftAllBounds   = Set.ofSeq <| Coroutine2 mkPtrAtLeftAllBounds   states allVarAndVals
+        let allPtrAtSymbAllBounds   = Set.ofSeq <| Coroutine2 mkPtrAtSymbAllBounds   states allVarAndVals
+        let allPtrAtRightAllBounds  = Set.ofSeq <| Coroutine2 mkPtrAtRightAllBounds  states allVarAndVals
+        let allPtrNoBounds          = Set.ofSeq <| Coroutine2 mkPtrNoBounds          states allVarAndVals
+        let allPtrAtSymbRightBound  = Set.ofSeq <| Coroutine2 mkPtrAtSymbRightBound  states allVarAndVals
+        let allPtrAtRightRightBound = Set.ofSeq <| Coroutine2 mkPtrAtRightRightBound states allVarAndVals
+        let allPtrAtLeftLeftBound   = Set.ofSeq <| Coroutine2 mkPtrAtLeftLeftBound   states allVarAndVals
+        let allPtrAtSymbLeftBound   = Set.ofSeq <| Coroutine2 mkPtrAtSymbLeftBound   states allVarAndVals
+
+        let allLeftBoundAndSymb  = Set.ofSeq <| Seq.map LeftBoundAndSymb  allVarAndVals
+        let allVarAndVal         = Set.ofSeq <| Seq.map VarAndVal         allVarAndVals
+        let allRightBoundAndSymb = Set.ofSeq <| Seq.map RightBoundAndSymb allVarAndVals
+
         let nonTerminals : Set<NonTerminal> =
             let allNonTerminals =
-                let allVarsAndValsInCompoundNonTerminal =
-                    Seq.collect
-                        (fun Xa -> [LeftBoundAndSymb(Xa); VarAndVal(Xa); RightBoundAndSymb(Xa)])
-                        allVarAndVals
-                    |> Set.ofSeq
                 [
-                    mkPtrAtLeftAllBounds
-                    mkPtrAtSymbAllBounds
-                    mkPtrAtRightAllBounds
-                    mkPtrNoBounds
-                    mkPtrAtSymbRightBound
-                    mkPtrAtRightRightBound
+                    allPtrAtLeftAllBounds
+                    allPtrAtSymbAllBounds
+                    allPtrAtRightAllBounds
+                    allPtrNoBounds
+                    allPtrAtSymbRightBound
+                    allPtrAtRightRightBound
+                    allPtrAtLeftLeftBound
+                    allPtrAtSymbLeftBound
+                    allLeftBoundAndSymb
+                    allVarAndVal
+                    allRightBoundAndSymb
                 ]
-                |> List.map (fun f -> Set.ofSeq <| Coroutine2 f states allVarAndVals)
-                |> fun lst -> allVarsAndValsInCompoundNonTerminal :: lst
                 |> Set.unionMany
                 |> Set.map CompoundNonTerminal
             allNonTerminals
             |> Set.add axiomA
             |> Set.add axiomB
 
+        let cntToSymb = CompoundNonTerminal >> NonTerminal
+
         let Step1 =
             Set.map (fun a -> mkProduction [axiomA] [PtrAtLeftAllBounds(initialState, (TLetter a, a))]) alphabet
-//        let Step2dot1 =
-//            let lefts = Map.filter (fun k -> function PtrAtLeftAllBounds(_, (TLetter x, y)) -> x = y | _ -> false) allNonTerminalsMap
-//            Set.map (fun i -> mkProduction [RawNonTerminal 'A'] [i]) <| getNums lefts
 
 //        let prod = List.map
 //            (fun vlvr -> mkProduction [RawNonTerminal 'A'] [mkPtrAtLeftAllBounds initialState vlvr])
