@@ -10,17 +10,17 @@ module internal LBATypes =
     type axiom = char
     type VarAndVal = trackSymbol * letterOfAlphabet
     type CompoundNonTerminal =
-        | PtrAtLeftAllBounds of state * VarAndVal   // [q, ¢, X, a, $]
-        | PtrAtSymbAllBounds of state * VarAndVal   // [¢, q, X, a, $]
-        | PtrAtRightAllBounds of VarAndVal * state  // [¢, X, a, q, $]
-        | PtrNoBounds of state * VarAndVal          // [q, X, a]
-        | PtrAtSymbRightBound of state * VarAndVal  // [q, X, a, $]
-        | PtrAtRightRightBound of VarAndVal * state // [X, a, q, $]
-        | LeftBoundAndSymb of VarAndVal             // [¢, X, a]
-        | VarAndVal of VarAndVal                    // [X, a]
-        | RightBoundAndSymb of VarAndVal            // [X, a, $]
-        | PtrAtLeftLeftBound of state * VarAndVal   // [q, ¢, X, a]
-        | PtrAtSymbLeftBound of state * VarAndVal   // [¢, q, X, a]
+        | PtrAtLeftAllBounds    of state * VarAndVal  // [q, ¢, X, a, $]
+        | PtrAtSymbAllBounds    of state * VarAndVal  // [¢, q, X, a, $]
+        | PtrAtRightAllBounds   of state * VarAndVal  // [¢, X, a, q, $]
+        | PtrNoBounds           of state * VarAndVal  // [q, X, a]
+        | PtrAtSymbRightBound   of state * VarAndVal  // [q, X, a, $]
+        | PtrAtRightRightBound  of state * VarAndVal  // [X, a, q, $]
+        | LeftBoundAndSymb      of VarAndVal          // [¢, X, a]
+        | VarAndVal             of VarAndVal          // [X, a]
+        | RightBoundAndSymb     of VarAndVal          // [X, a, $]
+        | PtrAtLeftLeftBound    of state * VarAndVal  // [q, ¢, X, a]
+        | PtrAtSymbLeftBound    of state * VarAndVal  // [¢, q, X, a]
     type NonTerminal =
         | RawNonTerminal of axiom
         | CompoundNonTerminal of CompoundNonTerminal
@@ -35,14 +35,14 @@ module internal GrammarOnePrimitives =
     let cent = StartSym Cent
     let dollar = EndSym Dollar
 
-    let mkPtrAtLeftAllBounds q Xa = PtrAtLeftAllBounds(q, Xa)
-    let mkPtrAtSymbAllBounds q Xa = PtrAtSymbAllBounds(q, Xa)
-    let mkPtrAtRightAllBounds q Xa = PtrAtRightAllBounds(Xa, q)
-    let mkPtrNoBounds q Xa = PtrNoBounds(q, Xa)
-    let mkPtrAtSymbRightBound q Xa = PtrAtSymbRightBound(q, Xa)
-    let mkPtrAtRightRightBound q Xa = PtrAtRightRightBound(Xa, q)
-    let mkPtrAtLeftLeftBound q Xa = PtrAtLeftLeftBound(q, Xa)
-    let mkPtrAtSymbLeftBound q Xa = PtrAtSymbLeftBound(q, Xa)
+    let mkPtrAtLeftAllBounds    q Xa = PtrAtLeftAllBounds(q, Xa)
+    let mkPtrAtSymbAllBounds    q Xa = PtrAtSymbAllBounds(q, Xa)
+    let mkPtrAtRightAllBounds   q Xa = PtrAtRightAllBounds(q, Xa)
+    let mkPtrNoBounds           q Xa = PtrNoBounds(q, Xa)
+    let mkPtrAtSymbRightBound   q Xa = PtrAtSymbRightBound(q, Xa)
+    let mkPtrAtRightRightBound  q Xa = PtrAtRightRightBound(q, Xa)
+    let mkPtrAtLeftLeftBound    q Xa = PtrAtLeftLeftBound(q, Xa)
+    let mkPtrAtSymbLeftBound    q Xa = PtrAtSymbLeftBound(q, Xa)
     let mkProduction x y = (x, y)
 
 
@@ -60,6 +60,13 @@ module internal LBAToGrammarOne =
         let axiomA = RawNonTerminal 'A'
         let axiomB = RawNonTerminal 'B'
 
+        let isFinite =
+            function
+            | PtrNoBounds(q, _)
+            | PtrAtSymbRightBound(q, _)
+            | PtrAtRightRightBound(q, _)
+            | PtrAtLeftLeftBound(q, _)
+            | PtrAtSymbLeftBound(q, _) -> Set.contains q finalStates
 
         let allPtrAtLeftAllBounds   = Set.ofSeq <| Coroutine2 mkPtrAtLeftAllBounds   states allVarAndVals
         let allPtrAtSymbAllBounds   = Set.ofSeq <| Coroutine2 mkPtrAtSymbAllBounds   states allVarAndVals
