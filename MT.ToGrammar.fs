@@ -62,19 +62,13 @@ module internal HelpFunctions =
 
     let enumerate = Seq.mapi (fun i x -> Var <| NumSymb i, x)
 
-    let mapOfSymb c = Map.filter (fun _ v ->
-        match v with
-        | (_, right) when right = c -> true
-        | _ -> false)
+    let mapOfSymb c = Map.filter (fun _ -> snd >> (=) c)
 
-    let toNumed tuple = Map.findKey (fun _ v -> v = tuple)
+    let toNumed tuple = Map.findKey (fun _ -> (=) tuple)
 
     let getNums = Map.toSeq >> Seq.map fst >> Set.ofSeq
 
-    let getEqualPairs = Map.filter (fun _ v ->
-        match v with
-        | (Letter x, TLetter y) when x = y -> true
-        | _ -> false)
+    let getEqualPairs = Map.filter (fun _ -> function (Letter x, TLetter y) -> x = y | _ -> false)
 
 module internal MTToGrammarZero =
     open HelpFunctions
