@@ -1,7 +1,7 @@
-open MT
-
-[<EntryPoint>]
-let main _ =
-    ToGrammar.transformation Lp.BuildMT.PrimesMT
-    |> printfn "%A\n"
-    0
+namespace MT
+module Main =
+    [<EntryPoint>]
+    let main _ =
+        MTToGrammarZero.transformation BuildMT.PrimesMT
+        |> printfn "%A\n"
+        0

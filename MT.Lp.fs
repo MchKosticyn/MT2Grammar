@@ -1,5 +1,6 @@
-namespace MT.Lp
-open MT.ToGrammar
+namespace MT
+open MT.MTTypes
+open MT.Primitives
 
 module private MicroMT =
     type DeltaFuncContents = (state * trackSymbol) * (state * trackSymbol * Move)
