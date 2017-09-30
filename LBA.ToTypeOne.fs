@@ -73,14 +73,18 @@ module internal LBAToGrammarOne =
             |> Map.ofSeq
         let ntPairs =
             Map.filter (fun _ -> function VarAndVal(_) -> true | _ -> false) allNonTerminalsMap
+            |> Map.toList
         let ntTriples =
             Map.filter (fun _ -> function RightBoundAndSymb(_) | LeftBoundAndSymb(_) | PtrNoBounds(_, _) -> true | _ -> false) allNonTerminalsMap
+            |> Map.toList
         let ntQuads =
             Map.filter (fun _ -> function PtrAtSymbRightBound(_, _) | PtrAtRightRightBound(_, _) -> true | _ -> false) allNonTerminalsMap
+            |> Map.toList
         let ntFives =
             Map.filter (fun _ -> function PtrAtLeftAllBounds(_, _) |
                                           PtrAtSymbAllBounds(_, _) |
                                           PtrAtRightAllBounds(_, _) -> true | _ -> false) allNonTerminalsMap
+            |> Map.toList
 
         let nonTerminals : Set<NonTerminal> =
             getNums allNonTerminalsMap
