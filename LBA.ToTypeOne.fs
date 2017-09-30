@@ -21,7 +21,7 @@ module internal LBATypes =
         | RightBoundAndSymb of VarAndVal            // [X, a, $]
     type NonTerminal =
         | RawNonTerminal of axiom
-        | NumberedSymb of int
+        | CompoundNonTerminal of CompoundNonTerminal
     type terminal = letterOfAlphabet
     type symbol = NonTerminal of NonTerminal | Terminal of terminal
     type production = symbol list * symbol list
@@ -52,52 +52,38 @@ module internal LBAToGrammarOne =
         let tapeAlphNoBounds =
             Seq.choose (function | StartSym _ | EndSym _ -> None | TrackSymbol t -> Some t) tapeAlph
         let allVarAndVals = Coroutine2 tupleSymbol tapeAlphNoBounds alphabet
-        let allNonTerminalsMap =
-            let allVarsAndValsInCompoundNonTerminal =
-                Seq.collect
-                    (fun Xa -> [LeftBoundAndSymb(Xa); VarAndVal(Xa); RightBoundAndSymb(Xa)])
-                    allVarAndVals
-                |> Set.ofSeq
-            [
-                mkPtrAtLeftAllBounds
-                mkPtrAtSymbAllBounds
-                mkPtrAtRightAllBounds
-                mkPtrNoBounds
-                mkPtrAtSymbRightBound
-                mkPtrAtRightRightBound
-            ]
-            |> List.map (fun f -> Set.ofSeq <| Coroutine2 f states allVarAndVals)
-            |> fun lst -> allVarsAndValsInCompoundNonTerminal :: lst
-            |> Set.unionMany
-            |> Seq.mapi (fun i x -> NumberedSymb i, x)
-            |> Map.ofSeq
-        let ntPairs =
-            Map.filter (fun _ -> function VarAndVal(_) -> true | _ -> false) allNonTerminalsMap
-            |> Map.toList
-        let ntTriples =
-            Map.filter (fun _ -> function RightBoundAndSymb(_) | LeftBoundAndSymb(_) | PtrNoBounds(_, _) -> true | _ -> false) allNonTerminalsMap
-            |> Map.toList
-        let ntQuads =
-            Map.filter (fun _ -> function PtrAtSymbRightBound(_, _) | PtrAtRightRightBound(_, _) -> true | _ -> false) allNonTerminalsMap
-            |> Map.toList
-        let ntFives =
-            Map.filter (fun _ -> function PtrAtLeftAllBounds(_, _) |
-                                          PtrAtSymbAllBounds(_, _) |
-                                          PtrAtRightAllBounds(_, _) -> true | _ -> false) allNonTerminalsMap
-            |> Map.toList
+
+        let axiomA = RawNonTerminal 'A'
+        let axiomB = RawNonTerminal 'B'
 
         let nonTerminals : Set<NonTerminal> =
-            getNums allNonTerminalsMap
-            |> Set.add (RawNonTerminal 'A')
-            |> Set.add (RawNonTerminal 'B')
+            let allNonTerminals =
+                let allVarsAndValsInCompoundNonTerminal =
+                    Seq.collect
+                        (fun Xa -> [LeftBoundAndSymb(Xa); VarAndVal(Xa); RightBoundAndSymb(Xa)])
+                        allVarAndVals
+                    |> Set.ofSeq
+                [
+                    mkPtrAtLeftAllBounds
+                    mkPtrAtSymbAllBounds
+                    mkPtrAtRightAllBounds
+                    mkPtrNoBounds
+                    mkPtrAtSymbRightBound
+                    mkPtrAtRightRightBound
+                ]
+                |> List.map (fun f -> Set.ofSeq <| Coroutine2 f states allVarAndVals)
+                |> fun lst -> allVarsAndValsInCompoundNonTerminal :: lst
+                |> Set.unionMany
+                |> Set.map CompoundNonTerminal
+            allNonTerminals
+            |> Set.add axiomA
+            |> Set.add axiomB
+
         let Step1 =
-            let rights = Map.filter (fun k -> function PtrAtLeftAllBounds(_, (TLetter x, y)) -> x = y | _ -> false) allNonTerminalsMap
-            Set.map (fun i -> mkProduction [RawNonTerminal 'A'] [i]) <| getNums rights
-
-
-
-//        let Step9 =
-//            Coroutine2 (fun a ) alphabet <| Map.filter () allNonTerminalsMap
+            Set.map (fun a -> mkProduction [axiomA] [PtrAtLeftAllBounds(initialState, (TLetter a, a))]) alphabet
+//        let Step2dot1 =
+//            let lefts = Map.filter (fun k -> function PtrAtLeftAllBounds(_, (TLetter x, y)) -> x = y | _ -> false) allNonTerminalsMap
+//            Set.map (fun i -> mkProduction [RawNonTerminal 'A'] [i]) <| getNums lefts
 
 //        let prod = List.map
 //            (fun vlvr -> mkProduction [RawNonTerminal 'A'] [mkPtrAtLeftAllBounds initialState vlvr])
