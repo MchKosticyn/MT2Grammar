@@ -71,6 +71,17 @@ module internal LBAToGrammarOne =
             |> Set.unionMany
             |> Seq.mapi (fun i x -> NumberedSymb i, x)
             |> Map.ofSeq
+        let ntPairs =
+            Map.filter (fun _ -> function VarAndVal(_) -> true | _ -> false) allNonTerminalsMap
+        let ntTriples =
+            Map.filter (fun _ -> function RightBoundAndSymb(_) | LeftBoundAndSymb(_) | PtrNoBounds(_, _) -> true | _ -> false) allNonTerminalsMap
+        let ntQuads =
+            Map.filter (fun _ -> function PtrAtSymbRightBound(_, _) | PtrAtRightRightBound(_, _) -> true | _ -> false) allNonTerminalsMap
+        let ntFives =
+            Map.filter (fun _ -> function PtrAtLeftAllBounds(_, _) |
+                                          PtrAtSymbAllBounds(_, _) |
+                                          PtrAtRightAllBounds(_, _) -> true | _ -> false) allNonTerminalsMap
+
         let nonTerminals : Set<NonTerminal> =
             getNums allNonTerminalsMap
             |> Set.add (RawNonTerminal 'A')
@@ -79,16 +90,7 @@ module internal LBAToGrammarOne =
             let rights = Map.filter (fun k -> function PtrAtLeftAllBounds(_, (TLetter x, y)) -> x = y | _ -> false) allNonTerminalsMap
             Set.map (fun i -> mkProduction [RawNonTerminal 'A'] [i]) <| getNums rights
 
-        let ntPairs =
-            Map.filter (fun _ -> function VarAndVal(_) -> true | _ -> false)
-        let ntTriples =
-            Map.filter (fun _ -> function RightBoundAndSymb(_) | LeftBoundAndSymb(_) | PtrNoBounds(_, _) -> true | _ -> false)
-        let ntQuads =
-            Map.filter (fun _ -> function PtrAtSymbRightBound(_, _) | PtrAtRightRightBound(_, _) -> true | _ -> false)
-        let ntFives =
-            Map.filter (fun _ -> function PtrAtLeftAllBounds(_, _) |
-                                          PtrAtSymbAllBounds(_, _) |
-                                          PtrAtRightAllBounds(_, _) -> true | _ -> false)
+
 
 //        let Step9 =
 //            Coroutine2 (fun a ) alphabet <| Map.filter () allNonTerminalsMap
