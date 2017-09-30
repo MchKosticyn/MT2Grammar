@@ -104,7 +104,6 @@ module private BuilderFunctions =
 module private Primes =
     open MicroMT
     open BuilderFunctions
-    open LBA.ToTypeOne
     // BAD: 1
     let CHK01 : MicroMTCombinator = // [n -> $ | [B]n
         [

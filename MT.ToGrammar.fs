@@ -14,12 +14,13 @@ module internal GrammarZeroTypes =
 
     type ExAplha = Letter of letterOfAlphabet | Eps
     type axiom = char
-    type notNumedSymb = ExAplha * trackSymbol
     type var = NumSymb of int | State of state | Axiom of axiom
     type terminal = letterOfAlphabet
     type symbol = Var of var | Terminal of terminal | E
     type production = symbol list * symbol list
     type Grammar = var Set * letterOfAlphabet Set * production Set * axiom
+
+    type notNumedSymb = ExAplha * trackSymbol
 
 module public FunctionalHelpers =
     let mapConcat f = List.concat << Set.map f
@@ -66,7 +67,7 @@ module internal HelpFunctions =
 
     let toNumed tuple = Map.findKey (fun _ -> (=) tuple)
 
-    let getNums = Map.toSeq >> Seq.map fst >> Set.ofSeq
+    let inline getNums m = (Map.toSeq >> Seq.map fst >> Set.ofSeq) m // DON'T CARRY THIS FUNC
 
     let getEqualPairs = Map.filter (fun _ -> function (Letter x, TLetter y) -> x = y | _ -> false)
 
