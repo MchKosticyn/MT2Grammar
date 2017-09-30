@@ -62,11 +62,15 @@ module internal LBAToGrammarOne =
 
         let isFinite =
             function
-            | PtrNoBounds(q, _)
-            | PtrAtSymbRightBound(q, _)
-            | PtrAtRightRightBound(q, _)
-            | PtrAtLeftLeftBound(q, _)
-            | PtrAtSymbLeftBound(q, _) -> Set.contains q finalStates
+            | PtrAtLeftAllBounds    (q, _)
+            | PtrAtSymbAllBounds    (q, _)
+            | PtrAtRightAllBounds   (q, _)
+            | PtrNoBounds           (q, _)
+            | PtrAtSymbRightBound   (q, _)
+            | PtrAtRightRightBound  (q, _)
+            | PtrAtLeftLeftBound    (q, _)
+            | PtrAtSymbLeftBound    (q, _) -> Set.contains q finalStates
+            | _ -> false
 
         let allPtrAtLeftAllBounds   = Set.ofSeq <| Coroutine2 mkPtrAtLeftAllBounds   states allVarAndVals
         let allPtrAtSymbAllBounds   = Set.ofSeq <| Coroutine2 mkPtrAtSymbAllBounds   states allVarAndVals
