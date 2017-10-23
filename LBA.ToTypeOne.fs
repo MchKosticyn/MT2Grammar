@@ -5,8 +5,10 @@ module internal LBATypes =
     type Cent = Cent
     type Dollar = Dollar
     type TrackSymbolLBA = TrackSymbol of trackSymbol | StartSym of Cent | EndSym of Dollar
-    type LBA = state Set * letterOfAlphabet Set * TrackSymbolLBA Set * deltaFunc * state * state Set
+    type deltaFuncLBA = Map<state * TrackSymbolLBA, state * TrackSymbolLBA * Move>
+    type LBA = state Set * letterOfAlphabet Set * TrackSymbolLBA Set * deltaFuncLBA * state * state Set
 
+module internal GrammarOneTypes =
     type axiom = char
     type VarAndVal = trackSymbol * letterOfAlphabet
     type CompoundNonTerminal =
@@ -31,11 +33,14 @@ module internal LBATypes =
 
 module internal GrammarOnePrimitives =
     open LBATypes
+    open GrammarOneTypes
 
     let axiomA = RawNonTerminal 'A'
     let axiomB = RawNonTerminal 'B'
     let ntAxiomA = NonTerminal axiomA
     let ntAxiomB = NonTerminal axiomB
+    let cent = StartSym Cent
+    let dollar = EndSym Dollar
 
     let mkProduction x y = (x, y)
 
@@ -58,11 +63,17 @@ module internal GrammarOnePrimitives =
 
 module internal LBAToGrammarOne =
     open GrammarOnePrimitives
+    open GrammarOneTypes
     open HelpFunctions
     open Primitives
     open LBATypes
 
     let transformationT1 ((states, alphabet, tapeAlph, delta, initialState, finalStates) : LBA) : Grammar =
+        let fromTrackSymbLBA = function
+            | TrackSymbol symb -> symb
+            | StartSym Cent -> ExSymbol 'C'
+            | EndSym Dollar -> ExSymbol '$'
+
         let tapeAlphNoBounds =
             Seq.choose (function | StartSym _ | EndSym _ -> None | TrackSymbol t -> Some t) tapeAlph
         let allVarAndVals = Coroutine2 tupleSymbol tapeAlphNoBounds alphabet
@@ -114,6 +125,64 @@ module internal LBAToGrammarOne =
             |> Set.add axiomA
             |> Set.add axiomB
 
+        let opWithDelta =
+            let deltaStep (state, symbol) (newState, newSymbol, shift) =
+                let symb = fromTrackSymbLBA symbol
+                let newSymb = fromTrackSymbLBA newSymbol
+                let shiftLeft : seq<production> =
+                    Seq.collect (fun a ->
+                        Seq.collect (fun Zb ->
+                            [
+                                mkProduction [cntToSymb <| VarAndVal Zb; cntToSymb <| PtrNoBounds(state, (symb, a))] [cntToSymb <| PtrNoBounds(newState, Zb); cntToSymb <| VarAndVal(newSymb, a)];
+                                mkProduction [cntToSymb <| VarAndVal Zb; cntToSymb <| PtrAtSymbRightBound(state, (symb, a))] [cntToSymb <| PtrNoBounds(newState, Zb); cntToSymb <| RightBoundAndSymb(newSymb, a)]
+                            ])
+                            allVarAndVals
+                        |> Seq.append <|
+                        [
+                            mkProduction [cntToSymb <| PtrAtSymbAllBounds(state, (symb, a))] [cntToSymb <| PtrAtLeftAllBounds(newState, (newSymb, a))];
+                            mkProduction [cntToSymb <| PtrAtSymbLeftBound(state, (symb, a))] [cntToSymb <| PtrAtLeftLeftBound(newState, (newSymb, a))]
+                        ])
+                        alphabet
+
+                let shiftLeftDollar =
+                    Seq.collect (fun Xa ->
+                        [
+                            mkProduction [cntToSymb <| PtrAtRightAllBounds(state, Xa)] [cntToSymb <| PtrAtSymbAllBounds(newState, Xa)];
+                            mkProduction [cntToSymb <| PtrAtRightRightBound(state, Xa)] [cntToSymb <| PtrAtSymbRightBound(newState, Xa)]
+                        ])
+                        allVarAndVals
+
+                let shiftRight : seq<production> =
+                    Seq.collect (fun a ->
+                        Seq.collect (fun Zb ->
+                            [
+                                mkProduction [cntToSymb <| PtrAtSymbLeftBound(state, (symb, a)); cntToSymb <| VarAndVal Zb] [cntToSymb <| LeftBoundAndSymb(newSymb, a); cntToSymb <| PtrNoBounds(newState, Zb)];
+                                mkProduction [cntToSymb <| PtrNoBounds(state, (symb, a)); cntToSymb <| VarAndVal Zb] [cntToSymb <| VarAndVal(newSymb, a); cntToSymb <| PtrNoBounds(newState, Zb)]
+                                mkProduction [cntToSymb <| PtrNoBounds(state, (symb, a)); cntToSymb <| RightBoundAndSymb Zb] [cntToSymb <| VarAndVal(newSymb, a); cntToSymb <| PtrAtSymbRightBound(newState, Zb)]
+                            ])
+                            allVarAndVals
+                        |> Seq.append <|
+                        [
+                            mkProduction [cntToSymb <| PtrAtSymbAllBounds(state, (symb, a))] [cntToSymb <| PtrAtRightAllBounds(newState, (newSymb, a))];
+                            mkProduction [cntToSymb <| PtrAtSymbRightBound(state, (symb, a))] [cntToSymb <| PtrAtRightRightBound(newState, (newSymb, a))]
+                        ])
+                        alphabet
+
+                let shiftRightCent : seq<production> =
+                    Seq.collect (fun Xa ->
+                        [
+                            mkProduction [cntToSymb <| PtrAtLeftAllBounds(state, Xa)] [cntToSymb <| PtrAtSymbAllBounds(newState, Xa)];
+                            mkProduction [cntToSymb <| PtrAtLeftLeftBound(state, Xa)] [cntToSymb <| PtrAtSymbLeftBound(newState, Xa)]
+                        ])
+                        allVarAndVals
+
+                match shift, symbol, newSymbol with
+                | Right, x, y when x = y && x = cent -> shiftRightCent
+                | Left, x, y when x = y && x = dollar -> shiftLeftDollar
+                | Left, _, _ -> shiftLeft
+                | Right, _, _ -> shiftRight
+                |> Set.ofSeq
+            Map.fold (fun acc k v -> Set.union acc <| deltaStep k v) Set.empty delta
 
         let Step1 : Set<production> =
             Set.map (fun a -> mkProduction [ntAxiomA] [cntToSymb <| PtrAtLeftAllBounds(initialState, (TLetter a, a))]) alphabet
@@ -163,6 +232,6 @@ module internal LBAToGrammarOne =
             Set.ofSeq <| Seq.append St9Dot12 St9Dot34
 
         let productions =
-            Set.unionMany [Step1; Step3; Step4; Step8; Step9]
+            Set.unionMany [Step1; Step3; Step4; Step8; Step9; opWithDelta]
 
         (nonTerminals, alphabet, productions, 'A')
