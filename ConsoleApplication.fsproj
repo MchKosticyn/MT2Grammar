@@ -52,6 +52,7 @@
     <Compile Include="MT.Lp.fs" />
     <Compile Include="Main.fs" />
     <Content Include="packages.config" />
+    <Content Include="README.txt" />
     <None Include="App.config" />
   </ItemGroup>
   <PropertyGroup>
