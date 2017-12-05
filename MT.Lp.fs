@@ -320,7 +320,9 @@ module private Primes =
             >> CHK_RIGHT_ROUGHLY_ZERO_EQUAL     //// IF right = 0 THEN return false ELSE right := <blanks>
         )
 
-module BuildMT =
+module internal BuildMT =
+    open LBATypes
+    open GrammarOnePrimitives
     let PrimesMT =
         let mkMT (d: deltaFunc) (alpha: Set<letterOfAlphabet>) (start: state) (fin: state Set) : MT =
             let collectStatesAndSymbols (states: state Set, track: trackSymbol Set) (stQ, symbA) (stP, symbB, _) =
@@ -331,3 +333,14 @@ module BuildMT =
             (states, alpha, track, d, start, fin)
         let mt = MicroMT.runMMTC Primes.MAIN 0
         mkMT (Map.ofList mt.delta) BuilderFunctions.alpha mt.initialState mt.finalStates
+    let PrimesLBA : LBA =
+        let (states, alpha, track, d, start, fin) = PrimesMT
+        let track = Set.filter (function ExSymbol 'C' | ExSymbol '$' -> false | _ -> true) track
+        let track = Set.map TrackSymbol track |> Set.add cent |> Set.add dollar
+        let d =
+            let toNormal = function
+                | ExSymbol 'C' -> StartSym Cent
+                | ExSymbol '$' -> EndSym Dollar
+                | t -> TrackSymbol t
+            Map.toList d |> List.map (fun ((p, a), (q, b, m)) -> (p, toNormal a), (q, toNormal b, m)) |> Map.ofList
+        (states, alpha, track, d, start, fin)
