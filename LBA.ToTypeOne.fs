@@ -34,7 +34,7 @@ module internal GrammarOneTypes =
         override this.ToString() =
             match this with
             | RawNonTerminal x -> toString x
-            | NumedNonTerminal x -> toString x
+            | NumedNonTerminal x -> "NT" + toString x
             | CompoundNonTerminal x -> failwithf "internal error: wrong non-terminal!"
     type terminal = letterOfAlphabet
     type symbol =
@@ -43,8 +43,8 @@ module internal GrammarOneTypes =
         with
         override this.ToString() =
             match this with
-            | NonTerminal x -> "NonTerminal " + toString x
-            | Terminal x -> "Terminal " + toString x
+            | NonTerminal x -> toString x
+            | Terminal x -> toString x
     type production = symbol list * symbol list
     type Grammar = NonTerminal Set * terminal Set * production Set * axiom
 

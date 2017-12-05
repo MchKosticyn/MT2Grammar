@@ -31,15 +31,15 @@ module internal GrammarZeroTypes =
         with
         override this.ToString() =
             match this with
-            | NumSymb x -> toString x
-            | State x -> toString x
+            | NumSymb x -> "NT" + toString x
+            | State x -> "NT" + toString x
             | Axiom x -> toString x
     type terminal = letterOfAlphabet
     type symbol = Var of var | Terminal of terminal | E
         with
         override this.ToString() =
             match this with
-            | Var x -> "NT" + toString x
+            | Var x -> toString x
             | Terminal x -> toString x
             | E -> "Eps"
     type production = symbol list * symbol list
