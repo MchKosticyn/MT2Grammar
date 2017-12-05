@@ -1,5 +1,6 @@
 namespace MT
 open MTTypes
+open System
 
 module internal LBATypes =
     type Cent = Cent
@@ -9,6 +10,7 @@ module internal LBATypes =
     type LBA = state Set * letterOfAlphabet Set * TrackSymbolLBA Set * deltaFuncLBA * state * state Set
 
 module internal GrammarOneTypes =
+    open Prelude
     type axiom = char
     type VarAndVal = trackSymbol * letterOfAlphabet
     type CompoundNonTerminal =
@@ -23,6 +25,20 @@ module internal GrammarOneTypes =
         | RightBoundAndSymb     of VarAndVal          // [X, a, $]
         | PtrAtLeftLeftBound    of state * VarAndVal  // [q, ¢, X, a]
         | PtrAtSymbLeftBound    of state * VarAndVal  // [¢, q, X, a]
+        with
+        override this.ToString() =
+            match this with
+            | PtrAtLeftAllBounds   (q, (X, a)) -> String.Format("[{0}, ¢, {1}, {2}, $]", toString q, toString X, toString a)
+            | PtrAtSymbAllBounds   (q, (X, a)) -> String.Format("[¢, {0}, {1}, {2}, $]", toString q, toString X, toString a)
+            | PtrAtRightAllBounds  (q, (X, a)) -> String.Format("[¢, {1}, {2}, {0}, $]", toString q, toString X, toString a)
+            | PtrNoBounds          (q, (X, a)) -> String.Format("[{0}, {1}, {2}]", toString q, toString X, toString a)
+            | PtrAtSymbRightBound  (q, (X, a)) -> String.Format("[{0}, {1}, {2}, $]", toString q, toString X, toString a)
+            | PtrAtRightRightBound (q, (X, a)) -> String.Format("[{1}, {2}, {0}, $]", toString q, toString X, toString a)
+            | LeftBoundAndSymb         (X, a)  -> String.Format("[¢, {0}, {1}]", toString X, toString a)
+            | VarAndVal                (X, a)  -> String.Format("[{0}, {1}]", toString X, toString a)
+            | RightBoundAndSymb        (X, a)  -> String.Format("[{0}, {1}, $]", toString X, toString a)
+            | PtrAtLeftLeftBound   (q, (X, a)) -> String.Format("[{0}, ¢, {1}, {2}]", toString q, toString X, toString a)
+            | PtrAtSymbLeftBound   (q, (X, a)) -> String.Format("[¢, {0}, {1}, {2}]", toString q, toString X, toString a)
     type NonTerminal =
         | RawNonTerminal of axiom
         | CompoundNonTerminal of CompoundNonTerminal
@@ -70,7 +86,7 @@ module internal LBAToGrammarOne =
     open LBATypes
 
     let productionToString (left, right) =
-        sprintf "%O -> %O" (System.String.Join " " )
+        sprintf "%O -> %O" (System.String.Join " ")
 
     let grammarToString (nonterminals, terminals, productions, axiom) =
         axiom.ToString() + "\n"
