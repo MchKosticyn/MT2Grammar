@@ -3,6 +3,14 @@
 module public Prelude =
     let toString x = x.ToString()
 
+module public ToString =
+    open Prelude
+
+    let productionToString (left, right) = left.ToString() + " -> " + right.ToString()
+    let grammarToString (nonterminals, terminals, productions, axiom) =
+        "Start non-terminal = " + axiom.ToString() + "\n"
+        + toString (Set.fold (fun acc x -> acc + productionToString x + "\n") "" productions)
+
 module internal MTTypes =
 
     type letterOfAlphabet = char

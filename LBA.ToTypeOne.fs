@@ -48,11 +48,6 @@ module internal GrammarOneTypes =
     type production = symbol list * symbol list
     type Grammar = NonTerminal Set * terminal Set * production Set * axiom
 
-    let productionToString (left, right) = left.ToString() + " -> " + right.ToString()
-
-    let grammarToString (nonterminals, terminals, productions, axiom) =
-        "Start non-terminal = " + axiom.ToString() + "\n" + toString (Set.fold (fun acc x -> acc + productionToString x + "\n") "" productions)
-
 module internal GrammarOnePrimitives =
     open LBATypes
     open GrammarOneTypes
