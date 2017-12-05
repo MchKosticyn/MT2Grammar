@@ -11,6 +11,7 @@ module internal LBATypes =
 
 module internal GrammarOneTypes =
     open Prelude
+
     type axiom = char
     type VarAndVal = trackSymbol * letterOfAlphabet
     type CompoundNonTerminal =
@@ -43,10 +44,28 @@ module internal GrammarOneTypes =
         | RawNonTerminal of axiom
         | CompoundNonTerminal of CompoundNonTerminal
         | NumedNonTerminal of int
+        with
+        override this.ToString() =
+            match this with
+            | RawNonTerminal x -> toString x
+            | CompoundNonTerminal x -> toString x
+            | NumedNonTerminal x -> toString x
     type terminal = letterOfAlphabet
-    type symbol = NonTerminal of NonTerminal | Terminal of terminal
+    type symbol =
+        | NonTerminal of NonTerminal
+        | Terminal of terminal
+        with
+        override this.ToString() =
+            match this with
+            | NonTerminal x -> toString x
+            | Terminal x -> toString x
     type production = symbol list * symbol list
     type Grammar = NonTerminal Set * terminal Set * production Set * axiom
+
+    let productionToString (left, right) = left.ToString() + " -> " + right.ToString()
+
+    let grammarToString (nonterminals, terminals, productions, axiom) =
+        axiom.ToString() + "\n" + toString (Set.fold (fun acc x -> acc + productionToString x + "\n") "" productions)
 
 module internal GrammarOnePrimitives =
     open LBATypes
@@ -84,15 +103,6 @@ module internal LBAToGrammarOne =
     open GrammarOneTypes
     open HelpFunctions
     open LBATypes
-
-    let productionToString (left, right) =
-        sprintf "%O -> %O" (System.String.Join " ")
-
-    let grammarToString (nonterminals, terminals, productions, axiom) =
-        axiom.ToString() + "\n"
-        + (Set.map (fun x -> x.ToString()) productions).ToString()
-
-
 
     let transformation ((states, alphabet, tapeAlph, delta, initialState, finalStates) : LBA) : Grammar =
         let fromTrackSymbLBA = function
