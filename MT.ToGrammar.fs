@@ -25,6 +25,9 @@ module internal GrammarZeroTypes =
 module public FunctionalHelpers =
     let mapConcat f = List.concat << Set.map f
 
+module public Prelude =
+    let toString x = x.ToString()
+
 module internal Primitives =
     open MTTypes
     open GrammarZeroTypes
