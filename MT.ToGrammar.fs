@@ -23,12 +23,25 @@ module internal MTTypes =
 
 module internal GrammarZeroTypes =
     open MTTypes
+    open Prelude
 
     type ExAplha = Letter of letterOfAlphabet | Eps
     type axiom = char
     type var = NumSymb of int | State of state | Axiom of axiom
+        with
+        override this.ToString() =
+            match this with
+            | NumSymb x -> toString x
+            | State x -> toString x
+            | Axiom x -> toString x
     type terminal = letterOfAlphabet
     type symbol = Var of var | Terminal of terminal | E
+        with
+        override this.ToString() =
+            match this with
+            | Var x -> "NT" + toString x
+            | Terminal x -> toString x
+            | E -> "Eps"
     type production = symbol list * symbol list
     type Grammar = var Set * letterOfAlphabet Set * production Set * axiom
 
