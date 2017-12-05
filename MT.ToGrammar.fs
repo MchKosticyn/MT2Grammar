@@ -4,17 +4,11 @@ module public Prelude =
     let toString x = x.ToString()
 
 module internal MTTypes =
-    open Prelude
 
     type letterOfAlphabet = char
     type exSymbol = char
     type state = int
     type trackSymbol = TLetter of letterOfAlphabet | ExSymbol of exSymbol
-        with
-        override this.ToString() =
-            match this with
-            | TLetter x
-            | ExSymbol x -> toString x
     type Move = Right | Left
     type deltaFunc = Map<state * trackSymbol, state * trackSymbol * Move>
     type MT = state Set * letterOfAlphabet Set * trackSymbol Set * deltaFunc * state * state Set

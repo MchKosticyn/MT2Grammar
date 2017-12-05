@@ -26,20 +26,6 @@ module internal GrammarOneTypes =
         | RightBoundAndSymb     of VarAndVal          // [X, a, $]
         | PtrAtLeftLeftBound    of state * VarAndVal  // [q, ¢, X, a]
         | PtrAtSymbLeftBound    of state * VarAndVal  // [¢, q, X, a]
-        with
-        override this.ToString() =
-            match this with
-            | PtrAtLeftAllBounds   (q, (X, a)) -> String.Format("[{0}, ¢, {1}, {2}, $]", toString q, toString X, toString a)
-            | PtrAtSymbAllBounds   (q, (X, a)) -> String.Format("[¢, {0}, {1}, {2}, $]", toString q, toString X, toString a)
-            | PtrAtRightAllBounds  (q, (X, a)) -> String.Format("[¢, {1}, {2}, {0}, $]", toString q, toString X, toString a)
-            | PtrNoBounds          (q, (X, a)) -> String.Format("[{0}, {1}, {2}]", toString q, toString X, toString a)
-            | PtrAtSymbRightBound  (q, (X, a)) -> String.Format("[{0}, {1}, {2}, $]", toString q, toString X, toString a)
-            | PtrAtRightRightBound (q, (X, a)) -> String.Format("[{1}, {2}, {0}, $]", toString q, toString X, toString a)
-            | LeftBoundAndSymb         (X, a)  -> String.Format("[¢, {0}, {1}]", toString X, toString a)
-            | VarAndVal                (X, a)  -> String.Format("[{0}, {1}]", toString X, toString a)
-            | RightBoundAndSymb        (X, a)  -> String.Format("[{0}, {1}, $]", toString X, toString a)
-            | PtrAtLeftLeftBound   (q, (X, a)) -> String.Format("[{0}, ¢, {1}, {2}]", toString q, toString X, toString a)
-            | PtrAtSymbLeftBound   (q, (X, a)) -> String.Format("[¢, {0}, {1}, {2}]", toString q, toString X, toString a)
     type NonTerminal =
         | RawNonTerminal of axiom
         | CompoundNonTerminal of CompoundNonTerminal
@@ -48,8 +34,8 @@ module internal GrammarOneTypes =
         override this.ToString() =
             match this with
             | RawNonTerminal x -> toString x
-            | CompoundNonTerminal x -> toString x
             | NumedNonTerminal x -> toString x
+            | CompoundNonTerminal x -> failwithf "internal error: wrong non-terminal!"
     type terminal = letterOfAlphabet
     type symbol =
         | NonTerminal of NonTerminal
@@ -57,15 +43,15 @@ module internal GrammarOneTypes =
         with
         override this.ToString() =
             match this with
-            | NonTerminal x -> toString x
-            | Terminal x -> toString x
+            | NonTerminal x -> "NonTerminal " + toString x
+            | Terminal x -> "Terminal " + toString x
     type production = symbol list * symbol list
     type Grammar = NonTerminal Set * terminal Set * production Set * axiom
 
     let productionToString (left, right) = left.ToString() + " -> " + right.ToString()
 
     let grammarToString (nonterminals, terminals, productions, axiom) =
-        axiom.ToString() + "\n" + toString (Set.fold (fun acc x -> acc + productionToString x + "\n") "" productions)
+        "Start non-terminal = " + axiom.ToString() + "\n" + toString (Set.fold (fun acc x -> acc + productionToString x + "\n") "" productions)
 
 module internal GrammarOnePrimitives =
     open LBATypes
