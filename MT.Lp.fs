@@ -358,6 +358,36 @@ module private Primes =
             >> GOTO_MID_TO_LEFT
         )
 
+module internal TestMT =
+    open BuilderFunctions
+    open Primes
+    open MicroMT
+
+    let runMT (_, _, _, delta, startST, finST) (word: string) =
+        let track = new ResizeArray<trackSymbol>(List.map TLetter <| List.ofSeq word)
+        let rec runner state index =
+            let symb = track.[index]
+            match Map.tryFind (state, symb) delta with
+            | None -> Set.contains state finST
+            | Some(state, symb', move) ->
+                track.[index] <- symb'
+                let index =
+                    match move with
+                    | Left -> index - 1
+                    | Right -> index + 1
+                let index =
+                    match index with
+                    | -1 ->
+                        track.Insert(0, Blank)
+                        0
+                    | n when n = track.Count ->
+                        track.Add(Blank)
+                        index
+                    | _ -> index
+                runner state index
+
+        runner startST 0
+
 module internal BuildMT =
     open LBATypes
     open GrammarOnePrimitives
