@@ -104,220 +104,258 @@ module private BuilderFunctions =
 module private Primes =
     open MicroMT
     open BuilderFunctions
-    // BAD: 1
-    let CHK01 : MicroMTCombinator = // [n -> $ | [B]n
+
+    let CHK01 : MicroMTCombinator = // [n -> $ | B[n
         [
             ((0, Zero), (1, Blank, Right)) // B[B] $
             ((0, One), (2, One, Right)) // 1[..
         ]
         @ skipBlank 2 1 Right // 1B[B] $
         @ [
-            ((2, One), (3, One, Left)) // [B]1..
-            ((3, Blank), (4, Blank, Left)) // [B]B1..
-            ((4, Blank), (5, InitSymb, Right)) // C[B]1..
+            ((2, Zero), (3, Zero, Left)) // B[1]0..
+            ((2, One), (3, One, Left)) // B[1]1..
+            ((3, One), (4, One, Left)) // [B]11..
+            ((4, Blank), (5, Blank, Left)) // [B]B11..
+            ((5, Blank), (6, Blank, Left)) // [B]BB11..
+            ((6, Blank), (7, InitSymb, Right)) // C[B]B1..
         ]
-        @ skipBlank 5 5 Right
-        |> mkMMTComb [5] // out is 5
+        @ skipBlank 7 8 Right // CB[B]1..
+        @ skipBlank 8 9 Right
+        |> mkMMTComb 9
 
     let COPY : MicroMTCombinator = // [n -> [nBn
-        skipAlpha 0 1 Left // [B]n
-        @ [((1, Blank), (2, Sharp, Right))] // #[n
-        @ castNAlphaToAlpha 2 2 Right // #x[n, x: NA, n: A
+        [
+            ((0, Zero), (2, NZero, Right)) // 2[n'B
+        ]
+        @ skipAlpha 2 2 Right // 2n'[B]
+        @ skipBlank 2 4 Right // 2n'B[m
+        @ skipAlpha 4 4 Right // 2n'Bm[B]
         @ [
-            ((2, TLetter '0'), (3, ExSymbol '#', Left))   // [#]#n'
-            ((3, ExSymbol '#'), (5, TLetter '0', Right))  // 0[#]n'
-            ((5, ExSymbol '#'), (7, ExSymbol '#', Right)) // 0#[n'
-            ((7, ExSymbol 'B'), (9, TLetter '2', Left))   // 0#n'N[B] -> 0#n'N]2
-            ((2, TLetter '1'), (4, ExSymbol '#', Left))   /// same
-            ((4, ExSymbol '#'), (6, TLetter '1', Right))  /// for
-            ((6, ExSymbol '#'), (8, ExSymbol '#', Right)) /// the
-            ((8, ExSymbol 'B'), (9, TLetter '3', Left))   /// ones
+            ((4, Blank), (5, Zero, Left)) // M2n'Bm]0
         ]
-        @ skipAll 7 7 Right // 0#[n' -> 0#n'[B]
-        @ skipAll 8 8 Right
-        @ skipAll 9 9 Left // 0#n'N]2 -> 0[#]n'N2  (merge forks)
-        @ [((9, Sharp), (2, Sharp, Right))] // 0#[n'N2
-        @ skipBlank 2 10 Left // n#n[B] -> n#n]
-        @ skipAlpha 10 10 Left // n[B]n
-        @ [((10, Sharp), (11, Blank, Left))] // n]Bn
-        @ skipAlpha 11 11 Left // [B]nBn
-        @ skipBlank 11 12 Right // [nBn
-        |> mkMMTComb [12]
 
-    let GOTO_RIGHT = // [n'BxBa -> n'BxBa[B]
-        skipAlpha 0 0 Right // [n'BxBa -> n'[B]xBa
-        @ skipBlank 0 1 Right // n'B[xBa
-        @ skipAlpha 1 1 Right // n'Bx[B]a
-        @ skipBlank 1 2 Right // n'BxB[a
-        @ skipAlpha 2 2 Right // n'BxBa[B]
-        |> mkMMTComb [2]
-
-    let COPY2 : MicroMTCombinator = // forall x . [nBx -> [nBxBn
-        let GOTO_LEFT = // Nn'BxBa] -> N[n'BxBa
-            skipAlpha 0 0 Left // Nn'Bx[B]a
-            @ skipBlank 0 1 Left // Nn'Bx]Ba
-            @ skipAlpha 1 1 Left // Nn'[B]xBa
-            @ skipBlank 1 2 Left // Nn']BxBa
-            @ skipAlpha 2 2 Left // N]n'BxBa
-            @ skipNAlpha 2 3 Right // N[n'BxBa
-            |> mkMMTComb [3]
-        let CLEAN = // N]BxBn -> [nBxBn
-            castNAlphaToAlpha 0 0 Left // [B]nBxBn
-            @ skipBlank 0 1 Right
-            |> mkMMTComb [1]
-        let copy1symb symb =
-            let cast x =
-                if x = Zero then NZero
-                else if x = One then NOne
-                else x
-            (symb, cast symb, Right, GOTO_RIGHT >> mkMMTComb [1] [((0, Blank), (1, symb, Left))]) // [snBxBa -> SnBxBa]s
-        cycle (
-            fork [
-                copy1symb Zero
-                copy1symb One
-            ]
-            >> GOTO_LEFT)
-        |> addToInitial Blank Blank Left // N]BxBn
-        >> CLEAN
-
-    let INSERT_Sharp_End = // nBxBn[B] -> nBx]Bn#$
-        [
-            ((0, Blank), (1, Sharp, Right)) // nBxBn#[B]
-            ((1, Blank), (2, EndSymb, Left)) // nBxBn[#]$
-            ((1, EndSymb), (2, EndSymb, Left)) // already have $
-            ((2, Sharp), (2, Sharp, Left))
-
+        // same for 1
+        @ [
+            ((0, One), (1, NOne, Right)) // 2[n'Bx
         ]
-        @ skipAlpha 2 2 Left // nBx[B]n#
-        @ skipBlank 2 3 Left // nBx]Bn#
-        |> mkMMTComb [3]
+        @ skipAlpha 1 1 Right // 3n'[B]m
+        @ skipBlank 1 3 Right // 3n'B[m
+        @ skipAlpha 3 3 Right // 3n'Bm[B]
+        @ [
+            ((3, Blank), (5, One, Left)) // M3n'Bm]1
+        ]
 
-    let GOTO_Sharp = // [NB]x# -> NBx]#
-        skipNAlpha 0 0 Right
+        @ skipAlpha 5 5 Left // M?n'[B]m?
+        @ skipBlank 5 5 Left // M[?]n'Bm?
+        @ skipNAlpha 5 0 Right // [n'
+
+        @ skipBlank 0 6 Left // N]Bn
+        @ castNAlphaToAlpha 6 6 Left // [B]nBn
+        @ skipBlank 6 7 Right
+        |> mkMMTComb 7
+
+    let DEC = // [nBx -> [nB{x-1}, x >= 2
+        skipAlpha 0 0 Right
         @ skipBlank 0 1 Right
-        @ skipAlpha 1 1 Right
-        @ [((1, Sharp), (2, Sharp, Left))]
-        |> mkMMTComb [2]
+        @ skipAlpha 1 1 Right // nBx[B]
+        @ skipBlank 1 2 Left  // nBx]
 
-    let UNSAFE_DEC_MID = // n]B -> {n-1}]B, n >= 1 for proper work
-        [
-            ((0, Zero), (0, One, Left))
-            ((0, One), (1, Zero, Right))
-        ]
-        @ skipAlpha 1 1 Right
-        @ skipBlank 1 2 Left
-        |> mkMMTComb [2]
-
-    let RIGHT_MINUS_MID = // x]Bn# -> $ | if n <= x then xX'B[{1^t}#g (lower st) else xB{n-x}[B] (higher st)
-        let SHIFT_Sharp = // n[NBxs]#y -> nN]Bx#sy
-            let SWAP_Sharp = // nNBxs]#y -> nN]Bx#sy
-                [
-                    ((0, Zero), (1, Sharp, Right))
-                    ((1, Sharp), (3, Zero, Left))
-                    ((0, One), (2, Sharp, Right))
-                    ((2, Sharp), (3, One, Left))
-                    ((3, Sharp), (4, Sharp, Left))
-                ]
-                @ skipAlpha 4 4 Left
-                @ skipBlank 4 5 Left
-                |> mkMMTComb [5]
-
-            mkMMTComb [0] <| skipAlpha 0 0 Left // n[NB]xs#y
-            >> GOTO_Sharp // nNBxs]#y
-            >> SWAP_Sharp
-
-        let DEC_L = // xX'Bt]# -> if n <= x then xX'B[{1^t}#g else xX'B[{t-1}]#
-            [
-                ((0, Blank), (1, Blank, Right)) // xX'[B]{1^t}#g -> xX'B[{1^t}#g //// n <= x, so RETURN
-                ((0, Zero), (0, One, Left)) // \ DEC
-                ((0, One), (2, Zero, Left)) // / DEC
-            ]
-            |> mkMMTComb [1; 2]
-
-        let CAST_AND_CLEAN = // B[XB{0*}#t -> BxB{0+}t[B]
-            castNAlphaToAlpha 0 0 Right
-            @ skipBlank 0 1 Right
-            @ [
-                ((1, Zero), (1, Zero, Right))
-                ((1, Sharp), (2, Zero, Right))
-            ]
-            @ skipAlpha 2 2 Right
-            |> mkMMTComb [2]
-
-        cycle (
-            mkMMTComb [0] <| skipNAlpha 0 0 Left // x[X]Bt# -> x]XBt#
-            >> fork [
-                (Zero, NZero, Right, mkMMTComb [1] []) // x[0]X'Bt# -> x2[X'Bt#
-                (One, NOne, Right, GOTO_Sharp >> DEC_L) // x[1]X'Bt# -> x3[X'Bt# -> x3X'[B{t-1}]#
-            ]
-            >> SHIFT_Sharp) // the only escape from cycle is `1` state of DEC_L
-        |> addToInitial Blank Blank Right // B[XB{0*}#t // results in 2 outer states! //// n -= x SUCCEDED
-        >> CAST_AND_CLEAN
-
-    let RIGHT_MODULO_MID = // nBx]Bn# -> nBx'X'B[{1^t}#g
-        cycle (                             //// while right > mid
-               RIGHT_MINUS_MID              ////     right -= mid
-            >> INSERT_Sharp_End)
-
-    let CHK_RIGHT_ROUGHLY_ZERO_EQUAL = // nBx'X'B[{1^t}#g -> $ (g == 0) | [nBx
-        let SHIFT_LEFT = // [#]gB$ -> g]BB$
-            [
-                ((0, Sharp), (1, Sharp, Right)) // #[gB$
-                ((1, Zero), (2, Sharp, Left))   // #]#g'B$
-                ((2, Sharp), (0, Zero, Right))  // 0[#]g'B$
-                ((1, One), (3, Sharp, Left))    // #]#g'B$
-                ((3, Sharp), (0, One, Right))   // 1[#]g'B$
-                ((1, Blank), (4, Blank, Left))  // g[#]B$
-                ((4, Sharp), (5, Blank, Left)) // g]BB$
-            ]
-            |> mkMMTComb [5]
-
-        let CAST_MID = // nBx[{B+}]$ -> [nBxy
-            skipBlank 0 0 Left // nBxY]
-            @ castNAlphaToAlpha 0 0 Left // nBx]y
-            @ skipAlpha 0 1 Left
-            @ skipAlpha 1 1 Left // n[B]xy
-            @ skipBlank 1 2 Left
-            @ skipAlpha 2 2 Left
-            @ skipBlank 2 3 Right
-            |> mkMMTComb [3]
-
-        mkMMTComb [0] [((0, One), (0, Blank, Right))] // nBx{B^t+1}[#]g
-        >> SHIFT_LEFT // nBx{B^t+1}g]BB$
-        >> mkMMTComb [1] [
-            ((0, Zero), (0, Blank, Left)) // nBx{B^t+1}k]{BB+}$, where k = g'1 or nothing
-            ((0, Blank), (2, Blank, Left)) // 2 is DEAD END
-            ((0, One), (1, Blank, Left)) // nBx{B^t+1}g']{B+}$
-            ((1, Zero), (1, Blank, Left))
-            ((1, One), (1, Blank, Left)) // nBx[{B+}]$
-        ]
-        >> CAST_MID
-
-    let CHK_MID_ONE_EQUAL = // nBx]B -> $ (x == 1) | n]Bx#
-        [
-            ((0, One), (1, One, Left)) // found 1
-            ((0, Zero), (2, Zero, Right)) // nBx[B]
-            ((1, Zero), (1, Zero, Left)) // keep checking 1 == 01 == 001 == ...
-            ((1, Blank), (3, Blank, Right)) // (x == 1) GOOD END
-            ((1, One), (2, One, Right)) // nB[x]B
-        ]
-        @ skipAlpha 2 2 Right // nBx[B]
-        @ [((2, Blank), (4, Sharp, Left))] // nBx]#
-        @ skipAlpha 4 4 Left
+        @ [
+            ((2, Zero), (2, One, Left))
+            ((2, One), (3, Zero, Right))
+        ] // nB[{x-1}B]
+        @ skipAlpha 3 3 Right // nB{x-1}[B]
+        @ skipBlank 3 4 Left
+        @ skipAlpha 4 4 Left // n[B]{x-1}
         @ skipBlank 4 5 Left
-        |> mkMMTCombFin (set[3]) (set[5]) // FINAL is 3, Outer is 5
+        @ skipAlpha 5 5 Left
+        @ skipBlank 5 6 Right
+        |> mkMMTComb 6
+
+    let COPY2 = // forall x . [nBx -> [nBxBn
+        [
+            ((0, Zero), (2, NZero, Right)) // 2[n'Bx
+        ]
+        @ skipAlpha 2 2 Right // 2n'[B]x
+        @ skipBlank 2 4 Right // 2n'B[x
+        @ skipAlpha 4 4 Right // 2n'Bx[B]
+        @ skipBlank 4 6 Right // M2n'BxB[m
+        @ skipAlpha 6 6 Right // M2n'BxBm[B]
+        @ [
+            ((6, Blank), (7, Zero, Left)) // M2n'BxBm]0
+        ]
+
+        // same for 1
+        @ [
+            ((0, One), (1, NOne, Right)) // 2[n'Bx
+        ]
+        @ skipAlpha 1 1 Right // 3n'[B]x
+        @ skipBlank 1 3 Right // 3n'B[x
+        @ skipAlpha 3 3 Right // 3n'Bx[B]
+        @ skipBlank 3 5 Right // M3n'BxB[m
+        @ skipAlpha 5 5 Right // M3n'BxBm[B]
+        @ [
+            ((5, Blank), (7, One, Left)) // M3n'BxBm]1
+        ]
+
+        @ skipAlpha 7 7 Left // M?n'Bx[B]m?
+        @ skipBlank 7 7 Left // M[?]n'BxBm?
+        @ skipNAlpha 7 0 Right // [n'Bx
+
+        @ skipBlank 0 8 Left // N]BxBn
+        @ castNAlphaToAlpha 8 8 Left // [B]nBxBn
+        @ skipBlank 8 9 Right
+        |> mkMMTComb 9
+
+    let RENEW_DOLLAR = // [nBxBn{B|$} -> [nBxBnB$
+        skipAlpha 0 0 Right   // n[B]xBn
+        @ skipBlank 0 1 Right // nB[xBn
+        @ skipAlpha 1 1 Right // nBx[B]n
+        @ skipBlank 1 2 Right // nBxB[n
+        @ skipAlpha 2 2 Right // nBxBn[B]
+        @ skipBlank 2 3 Right // nBxBnB[B]
+        @ [
+            ((3, Blank), (4, EndSymb, Left))
+            ((3, EndSymb), (4, EndSymb, Left))
+        ]
+        @ skipBlank 4 5 Left
+        @ skipAlpha 5 5 Left
+        @ skipBlank 5 6 Left
+        @ skipAlpha 6 6 Left
+        @ skipBlank 6 7 Left
+        @ skipAlpha 7 7 Left
+        @ skipBlank 7 8 Right
+        |> mkMMTComb 8
+
+    let CHK_MID_EQ_ONE = // [nBxBn -> $(x == 1) | nBx]Bn
+        skipAlpha 0 0 Right
+        @ skipBlank 0 1 Right
+        @ [
+            ((1, Zero), (1, Zero, Right))
+            ((1, One), (2, One, Right))
+        ]
+        @ skipBlank 2 3 Right // $, beep
+        @ skipAlpha 2 4 Right
+        @ skipAlpha 4 4 Right // nBx[B]n
+        @ skipBlank 4 5 Left
+        |> mkMMTCombFin (set[3]) (Forward 5)
+
+    let GOTO_MID_TO_RIGHT = // nBx]Bn -> nBxBn]
+        skipAlpha 0 1 Right
+        @ skipBlank 1 2 Right
+        @ skipAlpha 2 2 Right
+        @ skipBlank 2 3 Left
+        |> mkMMTComb 3
+
+    let RIGHT_NOT_EQ_ZERO = // xBm] -> $ | x]Bm
+        [
+            ((0, Zero), (0, Zero, Left))
+            ((0, One), (1, One, Left))
+        ]
+        @ skipBlank 0 3 Left // $, == 0
+
+        @ skipAlpha 1 1 Left
+        @ skipBlank 1 2 Left
+        |> mkMMTComb 2
+
+    let RIGHT_MINUS_MID = // nBx]Bn -> `yes: nBxB{n-x}] ; no: [xB{garbage, when n%x > 0}` , x >= 2, n > 0
+        let UNDIVIDABLE = 14
+        skipNAlpha 0 0 Left
+
+        // MID = 0..
+        @ [((0, Zero), (1, NZero, Right))]
+        @ skipNAlpha 1 1 Right
+        @ skipBlank 1 2 Right
+        @ skipAlpha 2 2 Right // x0'XBn[
+        @ skipBlank 2 3 Left
+        @ skipNAlpha 2 3 Left // x0'XBn]N
+        @ [
+            ((3, Zero), (4, NZero, Left)) // 2X[Bn']2
+            ((3, One), (4, NOne, Left)) // 2X[Bn']3
+        ]
+        @ skipAlpha 4 4 Left
+        @ skipBlank 4 0 Left // xX]Bn'N
+
+        // MID = 1..
+        @ [((0, One), (5, NOne, Right))]
+        @ skipNAlpha 5 5 Right
+        @ skipBlank 5 6 Right
+        @ skipAlpha 6 6 Right // x1'XBn[
+        @ skipBlank 6 7 Left
+        @ skipNAlpha 6 7 Left // x1'XBn]N
+        @ [
+            ((7, Zero), (8, NOne, Left)) // 3X[Bn']3 // decrement
+            ((7, One), (10, NZero, Left)) // 3X[Bn']2 // decrement
+        ]
+
+        @ [
+            ((8, Zero), (8, One, Left))
+            ((8, One), (10, Zero, Left)) // 3X[Bn']0111...113
+            ((8, Blank), (UNDIVIDABLE, Blank, Right)) // 3XB[?N|n?M
+        ]
+        @ skipAlpha 10 10 Left
+        @ skipBlank 10 0 Left
+
+        // [B]XBN
+        @ skipBlank 0 11 Right // [XBN    goto right =?= 0
+        @ castNAlphaToAlpha 11 11 Right // x[B]N
+        @ skipBlank 11 12 Right
+        @ castNAlphaToAlpha 12 12 Right // xBn[B]
+        @ skipBlank 12 13 Left
+
+        @ skipNAlpha UNDIVIDABLE UNDIVIDABLE Left // X[Bn']N
+        @ skipAlpha UNDIVIDABLE UNDIVIDABLE Left // X[B]n'N
+        @ skipBlank UNDIVIDABLE 15 Right
+        @ skipAlpha 15 15 Right
+        @ castNAlphaToAlpha 15 15 Right
+        @ skipBlank 15 16 Left
+        @ skipAlpha 16 16 Left
+        @ skipBlank 16 17 Left // X]Bn
+        @ castNAlphaToAlpha 17 17 Left
+        @ skipAlpha 17 17 Left
+        @ skipBlank 17 18 Right
+        |> mkMMTCombYesNo 13 18
+
+    let CLEAN_RIGHT = // [xBgarbage -> [xB
+        skipAlpha 0 0 Right
+        @ skipBlank 0 1 Right
+        @ [
+            ((1, Zero), (1, Blank, Right))
+            ((1, One), (1, Blank, Right))
+        ]
+        @ skipBlank 1 2 Left
+        @ skipBlank 2 2 Left // x]B
+        @ skipAlpha 2 3 Left // [Bx]B
+        @ skipAlpha 3 3 Left
+        @ skipBlank 3 4 Right
+        |> mkMMTComb 4
+
+    let RIGHT_MODULO_MID = // xBm] -> xB{m%x} -> $ | [xB
+        cycleYes (
+            RIGHT_NOT_EQ_ZERO
+            >> RIGHT_MINUS_MID
+        )
+        >> CLEAN_RIGHT
+
+    let GOTO_MID_TO_LEFT = // nB[x -> [nBx
+        skipAlpha 0 0 Left
+        @ skipBlank 0 1 Left
+        @ skipAlpha 1 1 Left
+        @ skipBlank 1 2 Right
+        |> mkMMTComb 2
+
 
     let MAIN =
-        CHK01                                   //// if n = 0 or n = 1 then return false
-        >> COPY                                 //// mid := n // mid >= 2
-        >> cycle (
-               COPY2                            //// right := n
-            >> GOTO_RIGHT
-            >> INSERT_Sharp_End
-            >> UNSAFE_DEC_MID                   //// mid-- // mid >= 1
-            >> CHK_MID_ONE_EQUAL // beep!       //// if mid = 1 then return true
-            >> RIGHT_MODULO_MID                 //// right %= mid
-            >> CHK_RIGHT_ROUGHLY_ZERO_EQUAL     //// IF right = 0 THEN return false ELSE right := <blanks>
+        CHK01
+        >> COPY
+        >> cycleForward (
+            DEC
+            >> COPY2
+            >> RENEW_DOLLAR
+            >> CHK_MID_EQ_ONE
+            >> GOTO_MID_TO_RIGHT
+            >> RIGHT_MODULO_MID
+            >> GOTO_MID_TO_LEFT
         )
 
 module internal BuildMT =
