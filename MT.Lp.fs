@@ -4,46 +4,68 @@ open MT.Primitives
 
 module private MicroMT =
     type DeltaFuncContents = (state * trackSymbol) * (state * trackSymbol * Move)
+    type OuterState =
+        | YesNo of yes: OuterState * no: OuterState
+        | Forward of state
+        | Finish
+    module OuterState =
+        let rec map f = function
+            | YesNo(l, r) -> YesNo(map f l, map f r)
+            | Forward x -> Forward <| f x
+            | Finish -> Finish
+
+        let rec fold (f: state -> 'a -> 'a) (z: 'a) = function
+            | YesNo(l, r) -> fold f (fold f z l) r
+            | Forward x -> f x z
+            | Finish -> z
+
+        let max = fold max -1
+
     type MicroMT =
         val maxState: state
         val delta: list<DeltaFuncContents>
         val initialState: state
-        val outerStates: Set<state> // connectors
+        val outerState: OuterState
         val finalStates: Set<state> // On which MT will 'beep'
 
         override this.ToString() =
             System.String.Format("INITIAL: {0}\nOUTERS: {1}\nFINALS: {2}\nDELTA:\n{3}",
-                                 this.initialState, this.outerStates, this.finalStates,
+                                 this.initialState, this.outerState, this.finalStates,
                                  String.concat "\n" <| List.map (fun x -> x.ToString()) this.delta)
 
-        new (shift: int, finalStates: Set<state>, outerStates: Set<state>, delta: list<DeltaFuncContents>) =
-            let shiftBy = Set.map ((+) shift)
-            let finalStates = shiftBy finalStates
-            let outerStates = shiftBy outerStates
+        new (start: state, shift: int, finalStates: Set<state>, outerState: OuterState, delta: list<DeltaFuncContents>) =
+            assert (start <= shift)
+            let shiftButInitial = function
+                | 0 -> start
+                | n -> n + shift
+            let finalStates = Set.map shiftButInitial finalStates
+            let outerState = OuterState.map shiftButInitial outerState
             let delta : list<DeltaFuncContents> =
-                List.map (fun ((p, a), (q, b, m)) -> ((p + shift, a), (q + shift, b, m))) delta
-            let maxState = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m)
-                                     (if outerStates.IsEmpty then -1 else outerStates.MaximumElement) // outer states may not be included in delta
-                                     delta
-            assert (Set.isEmpty <| Set.intersect finalStates outerStates) // final states can't be outer
-            {maxState=maxState; delta=delta; initialState=shift; outerStates=outerStates; finalStates=finalStates}
+                List.map (fun ((p, a), (q, b, m)) -> ((shiftButInitial p, a), (shiftButInitial q, b, m))) delta
 
-    type MicroMTCombinator = MMTC of (int -> MicroMT)
-    let mkMMTCombFin (finalStates: Set<state>) (outerStates: Set<state>) (delta: list<DeltaFuncContents>) : MicroMTCombinator =
-        MMTC <| fun shift -> new MicroMT(shift, finalStates, outerStates, delta)
-    let mkMMTComb = Set.ofList >> mkMMTCombFin Set.empty
+            let maxState = List.fold (fun m ((q, _), (p, _, _)) -> max q p |> max m)
+                                     (if finalStates.IsEmpty then -1 else finalStates.MaximumElement)
+                                     // outer states may not be included in delta
+                                     delta
+            {maxState=max maxState <| OuterState.max outerState; delta=delta; initialState=shift; outerState=outerState; finalStates=finalStates}
+
+    type MicroMTCombinator = MMTC of (state -> int -> MicroMT)
+    let mkMMTCombFin (finalStates: Set<state>) (outerState: OuterState) (delta: list<DeltaFuncContents>) : MicroMTCombinator =
+        MMTC <| fun start shift -> new MicroMT(start, shift, finalStates, outerState, delta)
+    let mkMMTCombYesNo x y = YesNo(Forward x, Forward y) |> mkMMTCombFin Set.empty
+    let mkMMTComb = Forward >> mkMMTCombFin Set.empty
 
     let runMMTC = function MMTC f -> f
 
-    let (>>) (a: MicroMTCombinator) (b: MicroMTCombinator) : MicroMTCombinator =
-        // connects Maximum `a` outer state with `b` initial state
-        let runner shift =
-            let left = runMMTC a shift
-            let outerState = left.outerStates.MaximumElement
-            let right = runMMTC b outerState
-            new MicroMT(shift, Set.union left.finalStates right.finalStates,
-                        Set.union right.outerStates <| Set.remove outerState left.outerStates, left.delta @ right.delta)
-        MMTC runner
+    let compose decompose nextConnector a b =
+        let left = runMMTC a 0 0
+        let outerState, z = decompose left.outerState
+        let right = runMMTC b outerState left.maxState
+        mkMMTCombFin (Set.union left.finalStates right.finalStates) (nextConnector z right.outerState) (left.delta @ right.delta)
+
+    let (>>) = compose (function Forward outerState -> outerState, Finish) (fun _ -> id)
+    let (.>>) = compose (function YesNo(Forward yes, no) -> yes, no) (fun no right -> YesNo(right, no))
+    let (>>.) = compose (function YesNo(yes, Forward no) -> no, yes) (fun yes right -> YesNo(yes, right))
 
 module private BuilderFunctions =
     open MicroMT
@@ -69,37 +91,15 @@ module private BuilderFunctions =
         let substState q = if q = fromS then toS else q
         List.map (fun ((q, a), (p, b, m)) -> ((substState q, a), (substState p, b, m)))
 
-    let fork (cases: list<trackSymbol * trackSymbol * Move * MicroMTCombinator>) : MicroMTCombinator =
-        let rec loop shift outerStates finalStates (mergeDeltas: state -> list<DeltaFuncContents>) =
-            function
-            | [] -> mkMMTCombFin finalStates <| Set.add shift outerStates <| mergeDeltas shift
-            | (fromL, toL, mv, mts)::mtss ->
-                let mt = runMMTC mts shift
-                let outerState = mt.outerStates.MaximumElement
-                loop (mt.maxState + 1)
-                     (Set.union outerStates <| Set.remove outerState mt.outerStates)
-                     (Set.union finalStates mt.finalStates)
-                     (fun lastState ->
-                        if List.isEmpty mt.delta // confluent MT
-                        then [((0, fromL), (lastState, toL, mv))]
-                        else
-                            ((0, fromL), (shift, toL, mv))
-                            :: substStepsOfDelta outerState lastState mt.delta
-                        @ mergeDeltas lastState)
-                     mtss
-        loop 1 Set.empty Set.empty (fun _ -> []) cases
+    let cycle decompose mmtc =
+        let mmt = runMMTC mmtc 0 0
+        let outerState, z = decompose mmt.outerState
+        let delta = substStepsOfDelta outerState 0 mmt.delta
+        let finalStates = Set.map (fun st -> if st = outerState then 0 else st) mmt.finalStates
+        mkMMTCombFin finalStates z delta
 
-    let cycle (mtc: MicroMTCombinator) : MicroMTCombinator = // loops on Maximum outer state
-        let mt = runMMTC mtc 0
-        let outerState = mt.outerStates.MaximumElement
-        mkMMTCombFin mt.finalStates <| Set.remove outerState mt.outerStates <| substStepsOfDelta outerState 0 mt.delta
-
-    let addToInitial (fromS: trackSymbol) (toS: trackSymbol) (m: Move) (mtc: MicroMTCombinator) : MicroMTCombinator =
-        // adds new Maximum outer state
-        let mt = runMMTC mtc 0
-        let freshState = mt.maxState + 1
-        let newStep = ((0, fromS), (freshState, toS, m))
-        mkMMTCombFin mt.finalStates <| Set.add freshState mt.outerStates <| newStep :: mt.delta
+    let cycleYes = cycle (function YesNo(Forward yes, no) -> yes, no)
+    let cycleForward = cycle (function Forward x -> x, Finish)
 
 module private Primes =
     open MicroMT
@@ -331,7 +331,7 @@ module internal BuildMT =
                 (states', track')
             let (states, track) = Map.fold collectStatesAndSymbols (Set.empty, Set.empty) d
             (states, alpha, track, d, start, fin)
-        let mt = MicroMT.runMMTC Primes.MAIN 0
+        let mt = MicroMT.runMMTC Primes.MAIN 0 0
         mkMT (Map.ofList mt.delta) BuilderFunctions.alpha mt.initialState mt.finalStates
     let PrimesLBA : LBA =
         let (states, alpha, track, d, start, fin) = PrimesMT
