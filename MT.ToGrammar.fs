@@ -2,14 +2,14 @@
 
 module public Prelude =
     let toString x = x.ToString()
+    let join s (xs: seq<'a>) = System.String.Join(s, xs)
 
 module public ToString =
     open Prelude
 
-    let productionToString (left, right) = left.ToString() + " -> " + right.ToString()
+    let productionToString (left, right) = sprintf "%O -> %O" (join " " left) (join " " right)
     let grammarToString (nonterminals, terminals, productions, axiom) =
-        "Start non-terminal = " + axiom.ToString() + "\n"
-        + toString (Set.fold (fun acc x -> acc + productionToString x + "\n") "" productions)
+        sprintf "Start non-terminal = %O\n%s" axiom <| join "\n" (Set.map productionToString productions)
 
 module internal MTTypes =
 
@@ -41,7 +41,7 @@ module internal GrammarZeroTypes =
             match this with
             | Var x -> toString x
             | Terminal x -> toString x
-            | E -> "Eps"
+            | E -> ""
     type production = symbol list * symbol list
     type Grammar = var Set * letterOfAlphabet Set * production Set * axiom
 
