@@ -8,7 +8,7 @@ module private MicroMT =
         | YesNo of yes: OuterState * no: OuterState
         | Forward of state
         | Finish
-    module OuterState =
+    module OuterStateUtils =
         let rec map f = function
             | YesNo(l, r) -> YesNo(map f l, map f r)
             | Forward x -> Forward <| f x
@@ -39,7 +39,7 @@ module private MicroMT =
                 | 0 -> start
                 | n -> n + shift
             let finalStates = Set.map shiftButInitial finalStates
-            let outerState = OuterState.map shiftButInitial outerState
+            let outerState = OuterStateUtils.map shiftButInitial outerState
             let delta : list<DeltaFuncContents> =
                 List.map (fun ((p, a), (q, b, m)) -> ((shiftButInitial p, a), (shiftButInitial q, b, m))) delta
 
@@ -47,7 +47,7 @@ module private MicroMT =
                                      (if finalStates.IsEmpty then -1 else finalStates.MaximumElement)
                                      // outer states may not be included in delta
                                      delta
-            {maxState=max maxState <| OuterState.max outerState; delta=delta; initialState=shift; outerState=outerState; finalStates=finalStates}
+            {maxState=max maxState <| OuterStateUtils.max outerState; delta=delta; initialState=shift; outerState=outerState; finalStates=finalStates}
 
     type MicroMTCombinator = MMTC of (state -> int -> MicroMT)
     let mkMMTCombFin (finalStates: Set<state>) (outerState: OuterState) (delta: list<DeltaFuncContents>) : MicroMTCombinator =
