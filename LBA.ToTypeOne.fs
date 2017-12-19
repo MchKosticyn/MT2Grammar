@@ -26,6 +26,23 @@ module internal GrammarOneTypes =
         | RightBoundAndSymb     of VarAndVal          // [X, a, $]
         | PtrAtLeftLeftBound    of state * VarAndVal  // [q, ¢, X, a]
         | PtrAtSymbLeftBound    of state * VarAndVal  // [¢, q, X, a]
+        with
+        override this.ToString() =
+            let vavToString = function
+                | (TLetter x, y) -> (x, y)
+                | (ExSymbol x, y) -> (x, y)
+            match this with
+            | PtrAtLeftAllBounds    (st, vav) -> sprintf "[%O, ¢, %O, $]" st <| vavToString vav
+            | PtrAtSymbAllBounds    (st, vav) -> sprintf "[¢, %O, %O, $]" st <| vavToString vav
+            | PtrAtRightAllBounds   (st, vav) -> sprintf "[¢, %O, %O, $]" st <| vavToString vav
+            | PtrNoBounds           (st, vav) -> sprintf "[%O, %O]" st <| vavToString vav
+            | PtrAtSymbRightBound   (st, vav) -> sprintf "[%O, %O, $]" st <| vavToString vav
+            | PtrAtRightRightBound  (st, vav) -> sprintf "[%O, %O, $]" st <| vavToString vav
+            | LeftBoundAndSymb            vav -> sprintf "[¢, %O]" <| vavToString vav
+            | VarAndVal                   vav -> sprintf "[%O]" <| vavToString vav
+            | RightBoundAndSymb           vav -> sprintf "[%O, $]" <| vavToString vav
+            | PtrAtLeftLeftBound    (st, vav) -> sprintf "[%O, ¢, %O]" st <| vavToString vav
+            | PtrAtSymbLeftBound    (st, vav) -> sprintf "[¢, %O, %O]" st <| vavToString vav
     type NonTerminal =
         | RawNonTerminal of axiom
         | CompoundNonTerminal of CompoundNonTerminal
@@ -35,7 +52,7 @@ module internal GrammarOneTypes =
             match this with
             | RawNonTerminal x -> toString x
             | NumedNonTerminal x -> "NT" + toString x
-            | CompoundNonTerminal x -> failwithf "internal error: wrong non-terminal!"
+            | CompoundNonTerminal x -> toString x //failwithf "internal error: wrong non-terminal!"
     type terminal = letterOfAlphabet
     type symbol =
         | NonTerminal of NonTerminal
@@ -256,11 +273,11 @@ module internal LBAToGrammarOne =
         let productions =
             Set.unionMany [Step1; Step3; Step4; Step8; Step9; opWithDelta]
 
-        let inline enumerateProd xs =
-            List.map (function
-                | NonTerminal (CompoundNonTerminal _ as symb) -> Map.find symb numedNonTerminals |> NumedNonTerminal |> NonTerminal
-                | symb -> symb)
-                xs
+        let inline enumerateProd xs = xs
+//            List.map (function
+//                | NonTerminal (CompoundNonTerminal _ as symb) -> Map.find symb numedNonTerminals |> NumedNonTerminal |> NonTerminal
+//                | symb -> symb)
+//                xs
 
         let numedProductions = Set.map (fun (leftProd, rightProd) -> (enumerateProd leftProd, enumerateProd rightProd)) productions
 
