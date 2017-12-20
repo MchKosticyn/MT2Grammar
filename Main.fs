@@ -6,10 +6,10 @@ module Main =
         streamWriter.Write(str)
     [<EntryPoint>]
     let main _ =
-        do MTToGrammarZero.transformation BuildMT.PrimesMT
-        |> ToString.grammarToString
-        |> writeToFile "grammarZero.txt"
-        do LBAToGrammarOne.transformation BuildMT.PrimesLBA
-        |> ToString.grammarToString
-        |> writeToFile "grammarOne.txt"
+        let zero = MTToGrammarZero.transformation BuildMT.PrimesMT
+        writeToFile "grammarZero.txt" <| ToString.grammarToString zero
+        zero |> MTToGrammarZero.getWord |> Prelude.toString |> printfn "%s"
+        let one = LBAToGrammarOne.transformation BuildMT.PrimesLBA
+        writeToFile "grammarOne.txt" <| ToString.grammarToString one
+        one |> LBAToGrammarOne.getWord |> Prelude.toString |> printfn "%s"
         0

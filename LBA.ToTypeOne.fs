@@ -97,10 +97,35 @@ module internal GrammarOnePrimitives =
     let getTerminalFromCnt = getVarAndVal >> snd >> Terminal
 
 module internal LBAToGrammarOne =
+    open System.Collections.Generic
     open GrammarOnePrimitives
     open GrammarOneTypes
     open HelpFunctions
     open LBATypes
+
+    let getWord ((_, _, prods, axiom): Grammar) =
+        let exchange where what word =
+            let rec help left acc s x =
+                match acc, s with
+                | [], ys ->
+                    let newLeft = List.take (List.length left - List.length x) <| List.rev left
+                    List.append newLeft <| List.append word ys
+                | a::xs, b::ys when a = b -> help (a::left) xs ys x
+                | _::_, b::ys -> help (b::left) x ys x
+                | _, [] -> where
+            help List.empty what where what
+        let allTerminals = List.forall (function Terminal _ -> true | _ -> false)
+        let q = Queue<symbol list>()
+        let mutable allRes = [[]]
+        let mutable res = axiom |> RawNonTerminal |> NonTerminal |> List.singleton
+        while List.length allRes < 2 do
+            Set.iter (fun (left, right) ->
+                let newRes = exchange res left right
+                if allTerminals newRes && not (List.contains newRes allRes) then allRes <- newRes :: allRes
+                if newRes <> res then q.Enqueue(newRes)) prods
+            res <- q.Dequeue()
+            printfn "%s" <| Prelude.toString res
+        allRes
 
     let transformation ((states, alphabet, tapeAlph, delta, initialState, finalStates) : LBA) : Grammar =
         let fromTrackSymbLBA = function
@@ -110,7 +135,7 @@ module internal LBAToGrammarOne =
 
         let tapeAlphNoBounds =
             Seq.choose (function StartSym _ | EndSym _ -> None | TrackSymbol t -> Some t) tapeAlph
-        let allVarAndVals = Coroutine2 tupleSymbol tapeAlphNoBounds alphabet
+        let allVarAndVals = Coroutine2 tapeAlphNoBounds alphabet makePair
 
         let isFinite =
             function
@@ -125,7 +150,7 @@ module internal LBAToGrammarOne =
             | _ -> false
 
 
-        let generateAllNonterminals p = Set.ofSeq <| Coroutine2 (fun q Xa -> p(q, Xa)) states allVarAndVals
+        let generateAllNonterminals p = Set.ofSeq <| Coroutine2 states allVarAndVals (fun q Xa -> p(q, Xa))
         let allPtrAtLeftAllBounds   = generateAllNonterminals PtrAtLeftAllBounds
         let allPtrAtSymbAllBounds   = generateAllNonterminals PtrAtSymbAllBounds
         let allPtrAtRightAllBounds  = generateAllNonterminals PtrAtRightAllBounds
@@ -155,11 +180,6 @@ module internal LBAToGrammarOne =
             ]
             |> Set.unionMany
             |> Set.map CompoundNonTerminal
-
-        let nonTerminals : Set<NonTerminal> =
-            allNonTerminals
-            |> Set.add axiomA
-            |> Set.add axiomB
 
         let numedNonTerminals = Map.ofList <| List.mapi (fun i x -> x, i) (List.ofSeq allNonTerminals)
 
@@ -227,12 +247,11 @@ module internal LBAToGrammarOne =
             Set.map (fun a -> mkProductionRaw [ntAxiomA] [cntToSymb <| PtrAtLeftAllBounds(initialState, (TLetter a, a))]) alphabet
 
         let Step3 : Set<production> =
-            Coroutine2
+            Coroutine2 finalStates allVarAndVals
                 (fun q Xa ->
                     [PtrAtLeftAllBounds; PtrAtSymbAllBounds; PtrAtRightAllBounds]
                     |> List.map (fun p -> mkProductionRaw [cntToSymb <| p(q, Xa)] [Terminal <| snd Xa])
                     |> Set.ofList)
-                finalStates allVarAndVals
             |> Set.unionMany
 
         let Step4 : Set<production> =
@@ -258,29 +277,25 @@ module internal LBAToGrammarOne =
 
         let Step9 : Set<production> =
             let St9Dot12 =
-                Coroutine2
+                Coroutine2 alphabet (allVarAndVal + allRightBoundAndSymb)
                     (fun a cnt -> mkProductionRaw [Terminal a; cntToSymb cnt]
                                                   [Terminal a; getTerminalFromCnt cnt])
-                    alphabet <| allVarAndVal + allRightBoundAndSymb
             let St9Dot34 =
-                Coroutine2
+                Coroutine2 alphabet (allVarAndVal + allLeftBoundAndSymb)
                     (fun b cnt -> mkProductionRaw [cntToSymb cnt; Terminal b]
                                                   [getTerminalFromCnt cnt; Terminal b])
-                    alphabet <| allVarAndVal + allLeftBoundAndSymb
 
             Set.ofSeq <| Seq.append St9Dot12 St9Dot34
 
         let productions =
             Set.unionMany [Step1; Step3; Step4; Step8; Step9; opWithDelta]
 
-        let inline enumerateProd xs = xs
-//            List.map (function
-//                | NonTerminal (CompoundNonTerminal _ as symb) -> Map.find symb numedNonTerminals |> NumedNonTerminal |> NonTerminal
-//                | symb -> symb)
-//                xs
+        let enumerateProd = List.map (function
+            | NonTerminal (CompoundNonTerminal _ as symb) -> Map.find symb numedNonTerminals |> NumedNonTerminal |> NonTerminal
+            | symb -> symb)
 
-        let numedProductions = Set.map (fun (leftProd, rightProd) -> (enumerateProd leftProd, enumerateProd rightProd)) productions
+        let numedProductions = Set.map (fun (leftProd, rightProd) -> enumerateProd leftProd, enumerateProd rightProd) productions
 
-        let nonTerminalsNums = numedNonTerminals |> Map.fold (fun acc k v -> Set.add (NumedNonTerminal v) acc) Set.empty
+        let nonTerminalsNums = numedNonTerminals |> Map.fold (fun acc _ v -> Set.add (NumedNonTerminal v) acc) Set.empty
 
         (nonTerminalsNums, alphabet, numedProductions, 'A')

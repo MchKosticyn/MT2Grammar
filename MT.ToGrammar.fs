@@ -8,7 +8,7 @@ module public ToString =
     open Prelude
 
     let productionToString (left, right) = sprintf "%O -> %O" (join " " left) (join " " right)
-    let grammarToString (nonterminals, terminals, productions, axiom) =
+    let grammarToString (_, _, productions, axiom) =
         sprintf "Start non-terminal = %O\n%s" axiom <| join "\n" (Set.map productionToString productions)
 
 module internal MTTypes =
@@ -27,10 +27,12 @@ module internal GrammarZeroTypes =
 
     type ExAplha = Letter of letterOfAlphabet | Eps
     type axiom = char
-    type var = NumSymb of int | State of state | Axiom of axiom
+    type notNumedSymb = ExAplha * trackSymbol
+    type var = NotNumedSymb of notNumedSymb | NumSymb of int | State of state | Axiom of axiom
         with
         override this.ToString() =
             match this with
+            | NotNumedSymb _ -> failwith "wrong symb!"
             | NumSymb x -> "NT" + toString x
             | State x -> "NT" + toString x
             | Axiom x -> toString x
@@ -45,8 +47,6 @@ module internal GrammarZeroTypes =
     type production = symbol list * symbol list
     type Grammar = var Set * letterOfAlphabet Set * production Set * axiom
 
-    type notNumedSymb = ExAplha * trackSymbol
-
 module public FunctionalHelpers =
     let mapConcat f = List.concat << Set.map f
 
@@ -58,7 +58,7 @@ module internal Primitives =
     let EndSymb = ExSymbol '$'
     let mkState = State >> Var
     let mkAxiom = Axiom >> Var
-    let inline tupleSymbol x y = (x, y)
+    let inline tupleSymbol x y = Var <| NotNumedSymb (x, y)
     let Blank = ExSymbol 'B'
     let inline mkProduction left right = (left, right)
     let mkExAlphabet = Set.add Eps << Set.map Letter
@@ -70,16 +70,12 @@ module internal HelpFunctions =
     open MTTypes
     open GrammarZeroTypes
 
-    let Coroutine2 lambda x y =
+    let makePair x y = (x, y)
+
+    let Coroutine2 x y lambda =
         seq { for a in x do
               for b in y do
                   yield lambda a b }
-
-    let Coroutine3 lambda x y z =
-        seq { for a in x do
-              for b in y do
-              for c in z do
-                  yield lambda a b c }
 
     let fromSymbolToVar =
         Set.map (function
@@ -88,13 +84,9 @@ module internal HelpFunctions =
 
     let enumerate = Seq.mapi (fun i x -> Var <| NumSymb i, x)
 
-    let mapOfSymb c = Map.filter (fun _ -> snd >> (=) c)
-
     let toNumed tuple = Map.findKey (fun _ -> (=) tuple)
 
     let inline getNums m = (Map.toSeq >> Seq.map fst >> Set.ofSeq) m // DON'T CARRY THIS FUNC
-
-    let getEqualPairs = Map.filter (fun _ -> function (Letter x, TLetter y) -> x = y | _ -> false)
 
 module internal MTToGrammarZero =
     open HelpFunctions
@@ -102,17 +94,51 @@ module internal MTToGrammarZero =
     open FunctionalHelpers
     open MTTypes
     open GrammarZeroTypes
+    open System.Collections.Generic
+
+    let brackets : Grammar =
+        let ax = Var <| Axiom 'S'
+        let prods =
+            set [
+                    mkProduction [ax] [Terminal '('; ax; Terminal ')'];
+                    mkProduction [ax] [E];
+                    mkProduction [ax] [ax;ax];
+                ]
+        (set[Axiom 'S'], set['('; ')'], prods, 'S')
+
+    let getWord ((_, _, prods, axiom): Grammar) =
+        let exchange where what word =
+            let rec help left acc s x =
+                match acc, s with
+                | [], ys ->
+                    let newLeft = List.take (List.length left - List.length x) <| List.rev left
+                    List.append newLeft <| List.append word ys
+                | a::xs, b::ys when a = b -> help (a::left) xs ys x
+                | _::_, b::ys -> help (b::left) x ys x
+                | _, [] -> where
+            help List.empty what where what
+        let allTerminals = List.forall (function Terminal _ | E -> true | _ -> false)
+        let q = Queue<symbol list>()
+        let mutable allRes = [[]]
+        let mutable res = axiom |> Axiom |> Var|> List.singleton
+        while List.length allRes < 2 do
+            Set.iter (fun (left, right) ->
+                let newRes = exchange res left right
+                if allTerminals newRes && not (List.contains newRes allRes) then allRes <- newRes :: allRes
+                if newRes <> res then q.Enqueue(newRes)) prods
+            res <- q.Dequeue()
+//            printfn "%s" <| Prelude.toString res
+        allRes
 
     let transformation ((states, alphabet, tapeAlph, delta, initialState, finalStates) : MT) : Grammar =
-        let allTuples = Coroutine2 tupleSymbol in
         let exAlph = mkExAlphabet alphabet in
-        let AllTuplesMap : Map<symbol, notNumedSymb> = Map.ofSeq <| enumerate (allTuples exAlph tapeAlph) in
+        let allTuples = Coroutine2 exAlph tapeAlph makePair in
+        let AllTuplesMap : Map<symbol, notNumedSymb> = allTuples |> enumerate |> Map.ofSeq in
         let Variables : Set<var> =
             Set.union (fromSymbolToVar <| getNums AllTuplesMap) (Set.map State states)
             |> Set.add (Axiom 'A')
             |> Set.add (Axiom 'B')
             |> Set.add (Axiom 'C')
-        in
         let firstPhase =
             let axiomA = mkAxiom 'A' in
             let axiomB = mkAxiom 'B' in
@@ -120,39 +146,29 @@ module internal MTToGrammarZero =
             set [
                 mkProduction [axiomA] [mkState initialState; axiomB];
                 mkProduction [axiomB] [axiomC];
-                mkProduction [axiomC] [toNumed (tupleSymbol Eps Blank) AllTuplesMap; axiomC];
+                mkProduction [axiomC] [tupleSymbol Eps Blank; axiomC];
                 mkProduction [axiomC] [E]
             ]
-            |> Set.union (Set.map (fun equalPair -> mkProduction [axiomB] [equalPair; axiomB]) (getNums <| getEqualPairs AllTuplesMap))
-        in
+            |> Set.union (Set.map (fun a -> mkProduction [axiomB] [tupleSymbol (Letter a) (TLetter a); axiomB]) alphabet)
         let secondPhase =
             let deltaStepToProductions (state, symbol) (newState, newSymbol, shift) =
-                let shiftRight = Coroutine2 (fun a b   -> mkProduction [mkState state;a] [b;mkState newState])
-                let shiftLeft  = Coroutine3 (fun a b c -> mkProduction [a;mkState state;b] [mkState newState;a;c])
-                let numOfMapOldSymb = getNums <| mapOfSymb symbol AllTuplesMap
-                let numOfMapNewSymb = getNums <| mapOfSymb newSymbol AllTuplesMap
                 match shift with
-                | Right -> shiftRight
-                | Left  -> shiftLeft <| getNums AllTuplesMap
-                <| numOfMapOldSymb
-                <| numOfMapNewSymb
+                | Right -> Seq.map (fun a -> mkProduction [mkState state; tupleSymbol a symbol] [tupleSymbol a newSymbol; mkState newState]) exAlph
+                | Left  -> Coroutine2 exAlph allTuples (fun a b -> mkProduction [tupleSymbol <|| b;mkState state;tupleSymbol a symbol] [mkState newState;tupleSymbol <|| b;tupleSymbol a newSymbol])
                 |> Set.ofSeq
             Map.fold (fun acc k v -> Set.union acc <| deltaStepToProductions k v) Set.empty delta
-        in
-        let thirdPhase =
-            Set.ofList <|
-            Map.fold (fun acc k (a, _) ->
-                mapConcat (fun state ->
-                    let q = mkState state
-                    let t = mkTerminal a
-                    [
-                        mkProduction [k; q] [q; t; q]
-                        mkProduction [q; k] [q; t; q]
-                        mkProduction [q] [E]
-                    ]) finalStates
-                @ acc)
-                []
-                AllTuplesMap
-        in
-        let prod = Set.unionMany [firstPhase; secondPhase; thirdPhase] in
-        (Variables, alphabet, prod, 'A')
+        let thirdPhase = Set.ofSeq <| Seq.concat (Coroutine2 allTuples finalStates (fun (a, C) q ->
+                let q = mkState q
+                let t = mkTerminal a
+                let aC = tupleSymbol a C
+                seq [
+                    mkProduction [aC; q] [q; t; q]
+                    mkProduction [q; aC] [q; t; q]
+                    mkProduction [q] [E]
+                ]))
+        let enumerateProd = List.map (function
+            | Var (NotNumedSymb symb) -> toNumed symb AllTuplesMap
+            | symb -> symb)
+        let numedProductions = Set.map (fun (leftProd, rightProd) -> enumerateProd leftProd, enumerateProd rightProd) <| Set.unionMany [firstPhase; secondPhase; thirdPhase]
+
+        (Variables, alphabet, numedProductions, 'A')
