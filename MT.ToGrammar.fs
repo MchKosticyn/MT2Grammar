@@ -106,28 +106,49 @@ module internal MTToGrammarZero =
                 ]
         (set[Axiom 'S'], set['('; ')'], prods, 'S')
 
-    let getWord ((_, _, prods, axiom): Grammar) =
-        let exchange where what word =
-            let rec help left acc s x =
-                match acc, s with
-                | [], ys ->
-                    let newLeft = List.take (List.length left - List.length x) <| List.rev left
-                    List.append newLeft <| List.append word ys
-                | a::xs, b::ys when a = b -> help (a::left) xs ys x
-                | _::_, b::ys -> help (b::left) x ys x
-                | _, [] -> where
-            help List.empty what where what
-        let allTerminals = List.forall (function Terminal _ | E -> true | _ -> false)
+    let takeWords n ((_, _, prods, axiom): Grammar) =
+        let exchange word left right =
+            let rec echange_help prefix word =
+                let compare word =
+                    let rec help word left =
+                        match word, left with
+                        | _, [] -> Some <| List.rev prefix @ right @ word
+                        | x::xs, y::ys when x = y -> help xs ys
+                        | _ -> None
+                    help word left
+
+                if List.length word < List.length left
+                then set[]
+                else
+                    match word with
+                    | hd::tl -> Option.foldBack Set.add (compare word) <| echange_help (hd::prefix) tl
+            echange_help [] word
+
+//        let exchange where what word : Set<list<symbol>> =
+//            let rec help left acc s x =
+//                match acc, s with
+//                | [], ys ->
+//                    let newLeft = List.take (List.length left - List.length x) <| List.rev left
+//                    List.append newLeft <| List.append word ys
+//                | a::xs, b::ys when a = b -> help (a::left) xs ys x
+//                | _::_, b::ys -> help (b::left) x ys x
+//                | _, [] -> where
+//            set[help List.empty what where what]
+
+        let allTerminals = List.forall (function Terminal _ -> true | _ -> false)
         let q = Queue<symbol list>()
-        let mutable allRes = [[]]
-        let mutable res = axiom |> Axiom |> Var|> List.singleton
-        while List.length allRes < 2 do
+        let mutable allRes = set[[]]
+        let mutable res = [mkAxiom axiom]
+        while Set.count allRes < n do
             Set.iter (fun (left, right) ->
-                let newRes = exchange res left right
-                if allTerminals newRes && not (List.contains newRes allRes) then allRes <- newRes :: allRes
-                if newRes <> res then q.Enqueue(newRes)) prods
+                let words = exchange res left right
+                let words = Set.map (List.filter (function E -> false | _ -> true)) words
+                let terminalWords, nonterminalWords = Set.partition allTerminals words
+                allRes <- Set.union terminalWords allRes
+                let nonterminalWords = Set.remove res nonterminalWords
+                Set.iter q.Enqueue nonterminalWords) prods
             res <- q.Dequeue()
-//            printfn "%s" <| Prelude.toString res
+//            printfn "%s" <| Prelude.join " " res
         allRes
 
     let transformation ((states, alphabet, tapeAlph, delta, initialState, finalStates) : MT) : Grammar =
