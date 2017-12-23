@@ -124,31 +124,20 @@ module internal MTToGrammarZero =
                     | hd::tl -> Option.foldBack Set.add (compare word) <| echange_help (hd::prefix) tl
             echange_help [] word
 
-//        let exchange where what word : Set<list<symbol>> =
-//            let rec help left acc s x =
-//                match acc, s with
-//                | [], ys ->
-//                    let newLeft = List.take (List.length left - List.length x) <| List.rev left
-//                    List.append newLeft <| List.append word ys
-//                | a::xs, b::ys when a = b -> help (a::left) xs ys x
-//                | _::_, b::ys -> help (b::left) x ys x
-//                | _, [] -> where
-//            set[help List.empty what where what]
-
         let allTerminals = List.forall (function Terminal _ -> true | _ -> false)
         let q = Queue<symbol list>()
-        let mutable allRes = set[[]]
+        let mutable allRes : Set<symbol list> = set[]
         let mutable res = [mkAxiom axiom]
         while Set.count allRes < n do
             Set.iter (fun (left, right) ->
-                let words = exchange res left right
-                let words = Set.map (List.filter (function E -> false | _ -> true)) words
+                let words = exchange res left right //TODO: why set of list?
+                let words = Set.map (List.filter (function E -> false | _ -> true)) words //TODO: what if terminals E will be in the left hand side
                 let terminalWords, nonterminalWords = Set.partition allTerminals words
                 allRes <- Set.union terminalWords allRes
                 let nonterminalWords = Set.remove res nonterminalWords
                 Set.iter q.Enqueue nonterminalWords) prods
             res <- q.Dequeue()
-//            printfn "%s" <| Prelude.join " " res
+            printfn "%s" <| Prelude.join " " res
         allRes
 
     let transformation ((states, alphabet, tapeAlph, delta, initialState, finalStates) : MT) : Grammar =
