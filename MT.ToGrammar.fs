@@ -34,7 +34,7 @@ module internal GrammarZeroTypes =
             match this with
             | NotNumedSymb _ -> failwith "wrong symb!"
             | NumSymb x -> "NT" + toString x
-            | State x -> "NT" + toString x
+            | State x -> "ST" + toString x
             | Axiom x -> toString x
     type terminal = letterOfAlphabet
     type symbol = Var of var | Terminal of terminal | E
@@ -95,6 +95,7 @@ module internal MTToGrammarZero =
     open MTTypes
     open GrammarZeroTypes
     open System.Collections.Generic
+    open Prelude
 
     let brackets : Grammar =
         let ax = Var <| Axiom 'S'
@@ -180,5 +181,11 @@ module internal MTToGrammarZero =
             | Var (NotNumedSymb symb) -> toNumed symb AllTuplesMap
             | symb -> symb)
         let numedProductions = Set.map (fun (leftProd, rightProd) -> enumerateProd leftProd, enumerateProd rightProd) <| Set.unionMany [firstPhase; secondPhase; thirdPhase]
+
+        AllTuplesMap
+        |> Map.toList
+        |> List.map (fun (a, n) -> sprintf "%O -> %O" a n)
+        |> join "\n"
+        |> printf "%s"
 
         (Variables, alphabet, numedProductions, 'A')
