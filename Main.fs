@@ -1,6 +1,7 @@
 namespace MT
 open System.IO
 open Prelude
+open MTTypes
 
 module Main =
     let writeToFile file (str : string) =
@@ -8,8 +9,10 @@ module Main =
         streamWriter.Write(str)
     [<EntryPoint>]
     let main _ =
-        let zero = MTToGrammarZero.transformation BuildMT.PrimesMT
-        writeToFile "grammarZero.txt" <| ToString.grammarToString zero
+        // Proof that MT works right
+//        List.init 50 (fun n -> n, System.Convert.ToString(n, 2))
+//        |> List.iter (fun (n, bn) -> printfn "%2O %6O %5O" n bn (TestMT.runMT BuildMT.PrimesMT bn))
+
         zero |> MTToGrammarZero.takeWords 1 |> Set.map (join ";") |> join "\n" |> printfn "%O"
 //        let one = LBAToGrammarOne.transformation BuildMT.PrimesLBA
 //        writeToFile "grammarOne.txt" <| ToString.grammarToString one

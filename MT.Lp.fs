@@ -363,7 +363,7 @@ module internal TestMT =
     open Primes
     open MicroMT
 
-    let runMT (_, _, _, delta, startST, finST) (word: string) =
+    let runMT ((_, _, _, delta, startST, finST) : MT) (word: string) =
         let track = new ResizeArray<trackSymbol>(List.map TLetter <| List.ofSeq word)
         let rec runner state index =
             let symb = track.[index]
