@@ -126,6 +126,7 @@ module internal MTToGrammarZero =
             echange_help [] word
 
         let removeEpsilon = List.filter (function E -> false | _ -> true)
+        let prods = Set.map (fun (l, r) -> removeEpsilon l, removeEpsilon r) prods
 
         let allTerminals = List.forall (function Terminal _ -> true | _ -> false)
         let nearFinish = List.forall (function Terminal _ | Var(State _) -> true | _ -> false)
@@ -134,20 +135,20 @@ module internal MTToGrammarZero =
         let mutable res = [mkAxiom axiom]
         while Set.count allRes < n do
             Set.iter (fun (left, right) ->
-                let left = removeEpsilon left
-                let right = removeEpsilon right
                 let words = exchange res left right //TODO: why set of list?
-                let words = Set.map removeEpsilon words //TODO: what if terminals E will be in the left hand side
+//                let words = Set.map removeEpsilon words //TODO: what if terminals E will be in the left hand side
                 if not(Set.isEmpty words) then
                     let terminalWords, nonterminalWords = Set.partition allTerminals words
                     allRes <- Set.union terminalWords allRes
                     let nonterminalWords = Set.remove res nonterminalWords
                     let nonterminalWords = Set.filter (not << q.Contains) nonterminalWords
                     Set.iter q.Enqueue nonterminalWords) prods
-            res <- q.Dequeue()
-            if nearFinish res then
-                q.Clear()
-            printfn "%s" <| Prelude.join " " res
+            if q.Count <> 0 then
+                res <- q.Dequeue()
+                if nearFinish res then
+                    q.Clear()
+//                printfn "%s" <| Prelude.join " " res
+//            System.Console.ReadKey() |> ignore
         allRes
 
     let transformation ((states, alphabet, tapeAlph, delta, initialState, finalStates) : MT) : Grammar =
@@ -195,6 +196,6 @@ module internal MTToGrammarZero =
         |> Map.toList
         |> List.map (fun (a, n) -> sprintf "%O -> %O" a n)
         |> join "\n"
-        |> printf "%s"
+        |> printfn "%s"
 
         (Variables, alphabet, numedProductions, 'A')
