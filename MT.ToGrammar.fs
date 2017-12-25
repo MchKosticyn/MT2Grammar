@@ -125,19 +125,28 @@ module internal MTToGrammarZero =
                     | hd::tl -> Option.foldBack Set.add (compare word) <| echange_help (hd::prefix) tl
             echange_help [] word
 
+        let removeEpsilon = List.filter (function E -> false | _ -> true)
+
         let allTerminals = List.forall (function Terminal _ -> true | _ -> false)
+        let nearFinish = List.forall (function Terminal _ | Var(State _) -> true | _ -> false)
         let q = Queue<symbol list>()
         let mutable allRes : Set<symbol list> = set[]
         let mutable res = [mkAxiom axiom]
         while Set.count allRes < n do
             Set.iter (fun (left, right) ->
+                let left = removeEpsilon left
+                let right = removeEpsilon right
                 let words = exchange res left right //TODO: why set of list?
-                let words = Set.map (List.filter (function E -> false | _ -> true)) words //TODO: what if terminals E will be in the left hand side
-                let terminalWords, nonterminalWords = Set.partition allTerminals words
-                allRes <- Set.union terminalWords allRes
-                let nonterminalWords = Set.remove res nonterminalWords
-                Set.iter q.Enqueue nonterminalWords) prods
+                let words = Set.map removeEpsilon words //TODO: what if terminals E will be in the left hand side
+                if not(Set.isEmpty words) then
+                    let terminalWords, nonterminalWords = Set.partition allTerminals words
+                    allRes <- Set.union terminalWords allRes
+                    let nonterminalWords = Set.remove res nonterminalWords
+                    let nonterminalWords = Set.filter (not << q.Contains) nonterminalWords
+                    Set.iter q.Enqueue nonterminalWords) prods
             res <- q.Dequeue()
+            if nearFinish res then
+                q.Clear()
             printfn "%s" <| Prelude.join " " res
         allRes
 
