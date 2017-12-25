@@ -132,8 +132,9 @@ module internal MTToGrammarZero =
         let nearFinish = List.forall (function Terminal _ | Var(State _) -> true | _ -> false)
         let q = Queue<symbol list>()
         let mutable allRes : Set<symbol list> = set[]
-        let mutable res = [mkAxiom axiom]
-        while Set.count allRes < n do
+        let mutable res = [Var <| NumSymb 19; Var <| NumSymb 19; Var <| NumSymb 19; Var <| State 0; Var <| NumSymb 8; Var <| NumSymb 0; Var <| Axiom 'C']
+//        let mutable res = [Var <| State 42; Terminal '1'; Terminal '0']
+        while Set.count allRes < 1 do
             Set.iter (fun (left, right) ->
                 let words = exchange res left right //TODO: why set of list?
 //                let words = Set.map removeEpsilon words //TODO: what if terminals E will be in the left hand side
@@ -165,7 +166,7 @@ module internal MTToGrammarZero =
             let axiomB = mkAxiom 'B' in
             let axiomC = mkAxiom 'C' in
             set [
-                mkProduction [axiomA] [mkState initialState; axiomB];
+                mkProduction [axiomA] [tupleSymbol Eps Blank; tupleSymbol Eps Blank; tupleSymbol Eps Blank; mkState initialState; axiomB];
                 mkProduction [axiomB] [axiomC];
                 mkProduction [axiomC] [tupleSymbol Eps Blank; axiomC];
                 mkProduction [axiomC] [E]
