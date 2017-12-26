@@ -2,7 +2,7 @@ namespace MT
 open MT.MTTypes
 open MT.Primitives
 
-module private MicroMT =
+module internal MicroMT =
     type DeltaFuncContents = (state * trackSymbol) * (state * trackSymbol * Move)
     type OuterState =
         | YesNo of yes: OuterState * no: OuterState
@@ -358,12 +358,40 @@ module private Primes =
             >> GOTO_MID_TO_LEFT
         )
 
+module private LBAPrimes =
+    open MicroMT
+    open BuilderFunctions
+    open Primes
+
+    let CHK01 : MicroMTCombinator = // [n -> $ | B[n
+        [
+            ((0, Zero), (1, Blank, Right)) // B[B] $
+            ((0, One), (2, One, Right)) // 1[..
+        ]
+        @ skipBlank 2 1 Right // 1B[B] $
+        @ skipAlpha 2 3 Left
+        |> mkMMTComb 3
+
+
+    let MAIN =
+        CHK01
+        >> COPY
+        >> cycleForward (
+            DEC
+            >> COPY2
+            >> CHK_MID_EQ_ONE
+            >> GOTO_MID_TO_RIGHT
+            >> RIGHT_MODULO_MID
+            >> GOTO_MID_TO_LEFT
+        )
+
 module internal TestMT =
     open BuilderFunctions
     open Primes
     open MicroMT
+    open LBATypes
 
-    let runMT ((_, _, _, delta, startST, finST) : MT) (word: string) =
+    let run delta startST finST (word: string) =
         let track = new ResizeArray<trackSymbol>(List.map TLetter <| List.ofSeq word)
         let rec runner state index =
             let symb = track.[index]
@@ -388,10 +416,17 @@ module internal TestMT =
 
         runner startST 0
 
+    let runMT ((_, _, _, delta, startST, finST) : MT) = run delta startST finST
+
+    let runLBA ((_, _, _, delta, startST, finST) : LBA) =
+        let unpack = function TrackSymbol t -> t
+        run (Map.toList delta |> List.map (fun ((p, a), (q, b, m)) -> (p, unpack a), (q, unpack b, m)) |> Map.ofList) startST finST
+
 module internal BuildMT =
     open LBATypes
+    open MicroMT
     open GrammarOnePrimitives
-    let PrimesMT =
+    let GenPrimes (mt: MicroMT) =
         let mkMT (d: deltaFunc) (alpha: Set<letterOfAlphabet>) (start: state) (fin: state Set) : MT =
             let collectStatesAndSymbols (states: state Set, track: trackSymbol Set) (stQ, symbA) (stP, symbB, _) =
                 let states' = states.Add(stQ).Add(stP)
@@ -399,10 +434,12 @@ module internal BuildMT =
                 (states', track')
             let (states, track) = Map.fold collectStatesAndSymbols (Set.empty, Set.empty) d
             (states, alpha, track, d, start, fin)
-        let mt = MicroMT.runMMTC Primes.MAIN 0 0
         mkMT (Map.ofList mt.delta) BuilderFunctions.alpha mt.initialState mt.finalStates
+
+    let PrimesMT = GenPrimes <| MicroMT.runMMTC Primes.MAIN 0 0
+
     let PrimesLBA : LBA =
-        let (states, alpha, track, d, start, fin) = PrimesMT
+        let (states, alpha, track, d, start, fin) = GenPrimes <| MicroMT.runMMTC LBAPrimes.MAIN 0 0
         let track = Set.filter (function ExSymbol 'C' | ExSymbol '$' -> false | _ -> true) track
         let track = Set.map TrackSymbol track |> Set.add cent |> Set.add dollar
         let d =
