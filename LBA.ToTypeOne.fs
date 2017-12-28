@@ -1,6 +1,7 @@
 namespace MT
 open MTTypes
 open System
+open Prelude
 
 module internal LBATypes =
     type Cent = Cent
@@ -10,8 +11,6 @@ module internal LBATypes =
     type LBA = state Set * letterOfAlphabet Set * TrackSymbolLBA Set * deltaFuncLBA * state * state Set
 
 module internal GrammarOneTypes =
-    open Prelude
-
     type axiom = char
     type VarAndVal = trackSymbol * letterOfAlphabet
     type CompoundNonTerminal =
@@ -103,31 +102,51 @@ module internal LBAToGrammarOne =
     open HelpFunctions
     open LBATypes
 
-    let getWord ((_, _, prods, axiom): Grammar) =
-        let exchange where what word =
-            let rec help left acc s x =
-                match acc, s with
-                | [], ys ->
-                    let newLeft = List.take (List.length left - List.length x) <| List.rev left
-                    List.append newLeft <| List.append word ys
-                | a::xs, b::ys when a = b -> help (a::left) xs ys x
-                | _::_, b::ys -> help (b::left) x ys x
-                | _, [] -> where
-            help List.empty what where what
+    let takeWords n ((_, _, prods, axiom): Grammar) =
+        let exchange word left right =
+            let rec echange_help prefix word =
+                let compare word =
+                    let rec help word left =
+                        match word, left with
+                        | _, [] -> Some <| List.rev prefix @ right @ word
+                        | x::xs, y::ys when x = y -> help xs ys
+                        | _ -> None
+                    help word left
+
+                if List.length word < List.length left
+                then set[]
+                else
+                    match word with
+                    | hd::tl -> Option.foldBack Set.add (compare word) <| echange_help (hd::prefix) tl
+            echange_help [] word
+
+        let printWord = Prelude.writeToFile "T1.Formation.txt" << sprintf "%s\n" << Prelude.join " "
+
         let allTerminals = List.forall (function Terminal _ -> true | _ -> false)
         let q = Queue<symbol list>()
-        let mutable allRes = [[]]
-        let mutable res = axiom |> RawNonTerminal |> NonTerminal |> List.singleton
-        while List.length allRes < 2 do
+        let mutable allRes : Set<symbol list> = set[]
+        let mutable res =
+            List.replicate (2 * 3 + 3) 6297
+            |> List.append [6279; 3140; 6290; 6290]
+            |> List.map (NumedNonTerminal >> NonTerminal) // simpleLBA: [332; 309; 316]
+        printWord [NonTerminal <| RawNonTerminal axiom]
+        printWord res
+        while Set.count allRes < n do
             Set.iter (fun (left, right) ->
-                let newRes = exchange res left right
-                if allTerminals newRes && not (List.contains newRes allRes) then allRes <- newRes :: allRes
-                if newRes <> res then q.Enqueue(newRes)) prods
-            res <- q.Dequeue()
-            printfn "%s" <| Prelude.toString res
-        allRes
+                let words = exchange res left right
+                if not(Set.isEmpty words) then
+                    let terminalWords, nonterminalWords = Set.partition allTerminals words
+                    allRes <- Set.union terminalWords allRes
+                    let nonterminalWords = Set.remove res nonterminalWords
+                    let nonterminalWords = Set.filter (not << q.Contains) nonterminalWords
+                    Set.iter q.Enqueue nonterminalWords) prods
+            if q.Count <> 0 then
+                res <- q.Dequeue()
+            printWord res
+        Set.map (List.filter ((<>) <| Terminal '\000')) allRes
 
     let transformation ((states, alphabet, tapeAlph, delta, initialState, finalStates) : LBA) : Grammar =
+        let alphabet = Set.add '\000' alphabet
         let fromTrackSymbLBA = function
             | TrackSymbol symb -> symb
             | StartSym Cent -> ExSymbol 'C'
@@ -135,7 +154,10 @@ module internal LBAToGrammarOne =
 
         let tapeAlphNoBounds =
             Seq.choose (function StartSym _ | EndSym _ -> None | TrackSymbol t -> Some t) tapeAlph
-        let allVarAndVals = Coroutine2 tapeAlphNoBounds alphabet makePair
+            |> Seq.append [TLetter '\000']
+        let allVarAndVals =
+            Coroutine2 tapeAlphNoBounds alphabet makePair
+            |> Set.ofSeq
 
         let isFinite =
             function
@@ -189,24 +211,28 @@ module internal LBAToGrammarOne =
                 let newSymb = fromTrackSymbLBA newSymbol
                 let shiftLeft : seq<production> =
                     Seq.collect (fun a ->
+                        let stateAndSymb = (state, (symb, a))
+                        let newSymb = (newSymb, a)
                         Seq.collect (fun Zb ->
                             [
-                                mkProduction [VarAndVal Zb; PtrNoBounds(state, (symb, a))] [PtrNoBounds(newState, Zb); VarAndVal(newSymb, a)];
-                                mkProduction [VarAndVal Zb; PtrAtSymbRightBound(state, (symb, a))] [PtrNoBounds(newState, Zb); RightBoundAndSymb(newSymb, a)]
+                                mkProduction [VarAndVal Zb; PtrNoBounds stateAndSymb] [PtrNoBounds(newState, Zb); VarAndVal newSymb]; // 6.2
+                                mkProduction [LeftBoundAndSymb Zb; PtrNoBounds stateAndSymb] [PtrAtSymbLeftBound(newState, Zb); VarAndVal newSymb] // my
+                                mkProduction [VarAndVal Zb; PtrAtSymbRightBound stateAndSymb] [PtrNoBounds(newState, Zb); RightBoundAndSymb newSymb] // 7.3
+                                mkProduction [LeftBoundAndSymb Zb; PtrAtSymbRightBound stateAndSymb] [PtrAtSymbLeftBound(newState, Zb); RightBoundAndSymb newSymb] // my
                             ])
                             allVarAndVals
                         |> Seq.append <|
                         [
-                            mkProduction [PtrAtSymbAllBounds(state, (symb, a))] [PtrAtLeftAllBounds(newState, (newSymb, a))];
-                            mkProduction [PtrAtSymbLeftBound(state, (symb, a))] [PtrAtLeftLeftBound(newState, (newSymb, a))]
+                            mkProduction [PtrAtSymbAllBounds stateAndSymb] [PtrAtLeftAllBounds(newState, newSymb)]; // 2.2
+                            mkProduction [PtrAtSymbLeftBound stateAndSymb] [PtrAtLeftLeftBound(newState, newSymb)] // 5.2
                         ])
                         alphabet
 
                 let shiftLeftDollar =
                     Seq.collect (fun Xa ->
                         [
-                            mkProduction [PtrAtRightAllBounds(state, Xa)] [PtrAtSymbAllBounds(newState, Xa)];
-                            mkProduction [PtrAtRightRightBound(state, Xa)] [PtrAtSymbRightBound(newState, Xa)]
+                            mkProduction [PtrAtRightAllBounds(state, Xa)] [PtrAtSymbAllBounds(newState, Xa)]; // 2.4
+                            mkProduction [PtrAtRightRightBound(state, Xa)] [PtrAtSymbRightBound(newState, Xa)] // 7.2
                         ])
                         allVarAndVals
 
@@ -214,23 +240,24 @@ module internal LBAToGrammarOne =
                     Seq.collect (fun a ->
                         Seq.collect (fun Zb ->
                             [
-                                mkProduction [PtrAtSymbLeftBound(state, (symb, a)); VarAndVal Zb] [LeftBoundAndSymb(newSymb, a); PtrNoBounds(newState, Zb)];
-                                mkProduction [PtrNoBounds(state, (symb, a)); VarAndVal Zb] [VarAndVal(newSymb, a); PtrNoBounds(newState, Zb)]
-                                mkProduction [PtrNoBounds(state, (symb, a)); RightBoundAndSymb Zb] [VarAndVal(newSymb, a); PtrAtSymbRightBound(newState, Zb)]
+                                mkProduction [PtrAtSymbLeftBound(state, (symb, a)); VarAndVal Zb] [LeftBoundAndSymb(newSymb, a); PtrNoBounds(newState, Zb)]; // 5.3
+                                mkProduction [PtrAtSymbLeftBound(state, (symb, a)); RightBoundAndSymb Zb] [LeftBoundAndSymb(newSymb, a); PtrAtSymbRightBound(newState, Zb)] // my
+                                mkProduction [PtrNoBounds(state, (symb, a)); VarAndVal Zb] [VarAndVal(newSymb, a); PtrNoBounds(newState, Zb)] // 6.1
+                                mkProduction [PtrNoBounds(state, (symb, a)); RightBoundAndSymb Zb] [VarAndVal(newSymb, a); PtrAtSymbRightBound(newState, Zb)] // 6.3
                             ])
                             allVarAndVals
                         |> Seq.append <|
                         [
-                            mkProduction [PtrAtSymbAllBounds(state, (symb, a))] [PtrAtRightAllBounds(newState, (newSymb, a))];
-                            mkProduction [PtrAtSymbRightBound(state, (symb, a))] [PtrAtRightRightBound(newState, (newSymb, a))]
+                            mkProduction [PtrAtSymbAllBounds(state, (symb, a))] [PtrAtRightAllBounds(newState, (newSymb, a))]; // 2.3
+                            mkProduction [PtrAtSymbRightBound(state, (symb, a))] [PtrAtRightRightBound(newState, (newSymb, a))] // 7.1
                         ])
                         alphabet
 
                 let shiftRightCent : seq<production> =
                     Seq.collect (fun Xa ->
                         [
-                            mkProduction [PtrAtLeftAllBounds(state, Xa)] [PtrAtSymbAllBounds(newState, Xa)];
-                            mkProduction [PtrAtLeftLeftBound(state, Xa)] [PtrAtSymbLeftBound(newState, Xa)]
+                            mkProduction [PtrAtLeftAllBounds(state, Xa)] [PtrAtSymbAllBounds(newState, Xa)]; // 2.1
+                            mkProduction [PtrAtLeftLeftBound(state, Xa)] [PtrAtSymbLeftBound(newState, Xa)] // 5.1
                         ])
                         allVarAndVals
 
@@ -266,11 +293,11 @@ module internal LBAToGrammarOne =
 
         let Step8 : Set<production> =
             [
-                allPtrNoBounds
-                allPtrAtSymbRightBound
-                allPtrAtRightRightBound
-                allPtrAtLeftLeftBound
-                allPtrAtSymbLeftBound
+                allPtrNoBounds // 8.3
+                allPtrAtSymbRightBound // 8.4
+                allPtrAtRightRightBound // 8.5
+                allPtrAtLeftLeftBound // 8.1
+                allPtrAtSymbLeftBound // 8.2
             ] |> Set.unionMany
             |> Set.filter isFinite
             |> Set.map (fun cnt -> mkProductionRaw [cntToSymb cnt] [getTerminalFromCnt cnt])

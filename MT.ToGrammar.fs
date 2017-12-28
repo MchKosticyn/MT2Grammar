@@ -1,8 +1,13 @@
 ﻿namespace MT
 
 module public Prelude =
+    open System.IO
     let toString x = x.ToString()
     let join s (xs: seq<'a>) = System.String.Join(s, xs)
+
+    let writeToFile file (str : string) =
+        use streamWriter = new StreamWriter(file, true)
+        streamWriter.Write(str)
 
 module public ToString =
     open Prelude
@@ -125,6 +130,8 @@ module internal MTToGrammarZero =
                     | hd::tl -> Option.foldBack Set.add (compare word) <| echange_help (hd::prefix) tl
             echange_help [] word
 
+        let printWord = Prelude.writeToFile "T0.Formation.txt" << sprintf "%s\n" << Prelude.join " "
+
         let removeEpsilon = List.filter (function E -> false | _ -> true)
         let prods = Set.map (fun (l, r) -> removeEpsilon l, removeEpsilon r) prods
 
@@ -132,12 +139,15 @@ module internal MTToGrammarZero =
         let nearFinish = List.forall (function Terminal _ | Var(State _) -> true | _ -> false)
         let q = Queue<symbol list>()
         let mutable allRes : Set<symbol list> = set[]
-        let mutable res = [Var <| NumSymb 19; Var <| NumSymb 19; Var <| NumSymb 19; Var <| State 0; Var <| NumSymb 8; Var <| NumSymb 0; Var <| Axiom 'C']
-//        let mutable res = [Var <| State 42; Terminal '1'; Terminal '0']
-        while Set.count allRes < 1 do
+        let mutable res = List.map Var [NumSymb 19; NumSymb 19; NumSymb 19; State 0; NumSymb 8; NumSymb 0; Axiom 'C']
+        printWord [mkAxiom axiom]
+        printWord <| List.map Var [NumSymb 19; NumSymb 19; NumSymb 19; State 0; Axiom 'B']
+        printWord <| List.map Var [NumSymb 19; NumSymb 19; NumSymb 19; State 0; NumSymb 8; Axiom 'B']
+        printWord <| List.map Var [NumSymb 19; NumSymb 19; NumSymb 19; State 0; NumSymb 8; NumSymb 0; Axiom 'B']
+        printWord res
+        while Set.count allRes < n do
             Set.iter (fun (left, right) ->
-                let words = exchange res left right //TODO: why set of list?
-//                let words = Set.map removeEpsilon words //TODO: what if terminals E will be in the left hand side
+                let words = exchange res left right
                 if not(Set.isEmpty words) then
                     let terminalWords, nonterminalWords = Set.partition allTerminals words
                     allRes <- Set.union terminalWords allRes
@@ -148,8 +158,7 @@ module internal MTToGrammarZero =
                 res <- q.Dequeue()
                 if nearFinish res then
                     q.Clear()
-//                printfn "%s" <| Prelude.join " " res
-//            System.Console.ReadKey() |> ignore
+            printWord res
         allRes
 
     let transformation ((states, alphabet, tapeAlph, delta, initialState, finalStates) : MT) : Grammar =
@@ -192,11 +201,5 @@ module internal MTToGrammarZero =
             | Var (NotNumedSymb symb) -> toNumed symb AllTuplesMap
             | symb -> symb)
         let numedProductions = Set.map (fun (leftProd, rightProd) -> enumerateProd leftProd, enumerateProd rightProd) <| Set.unionMany [firstPhase; secondPhase; thirdPhase]
-
-        AllTuplesMap
-        |> Map.toList
-        |> List.map (fun (a, n) -> sprintf "%O -> %O" a n)
-        |> join "\n"
-        |> printfn "%s"
 
         (Variables, alphabet, numedProductions, 'A')

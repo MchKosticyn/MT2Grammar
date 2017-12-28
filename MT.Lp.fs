@@ -442,10 +442,5 @@ module internal BuildMT =
         let (states, alpha, track, d, start, fin) = GenPrimes <| MicroMT.runMMTC LBAPrimes.MAIN 0 0
         let track = Set.filter (function ExSymbol 'C' | ExSymbol '$' -> false | _ -> true) track
         let track = Set.map TrackSymbol track |> Set.add cent |> Set.add dollar
-        let d =
-            let toNormal = function
-                | ExSymbol 'C' -> StartSym Cent
-                | ExSymbol '$' -> EndSym Dollar
-                | t -> TrackSymbol t
-            Map.toList d |> List.map (fun ((p, a), (q, b, m)) -> (p, toNormal a), (q, toNormal b, m)) |> Map.ofList
+        let d = Map.toList d |> List.map (fun ((p, a), (q, b, m)) -> (p, TrackSymbol a), (q, TrackSymbol b, m)) |> Map.ofList
         (states, alpha, track, d, start, fin)
